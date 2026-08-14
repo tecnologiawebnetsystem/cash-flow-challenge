@@ -7,15 +7,17 @@ using Microsoft.Extensions.Logging;
 namespace CashFlow.Infrastructure.BackgroundServices;
 
 /// <summary>
-/// Periodic safety net that closes the gap left by the best-effort,
-/// bounded consolidation queue: under the documented peak load (50 req/s,
-/// up to 5% acceptable loss) a consolidation *signal* can legitimately be
-/// dropped, and a transient failure can exhaust every retry.
+/// Rede de segurança periódica que fecha a lacuna deixada pela fila de
+/// consolidação, que é best-effort e limitada: sob o pico de carga
+/// documentado (50 req/s, com até 5% de perda aceitável) um *sinal* de
+/// consolidação pode legitimamente ser descartado, e uma falha transitória
+/// pode esgotar todas as tentativas de retry.
 ///
-/// This worker re-enqueues consolidation for any date that has launches but
-/// no successful <c>Consolidated</c> daily balance yet - regardless of why
-/// it is missing. Because consolidation is idempotent, this is always safe
-/// to run, even if it ends up re-processing a date unnecessarily.
+/// Este worker reenfileira a consolidação para qualquer data que tenha
+/// lançamentos mas ainda não tenha um saldo diário <c>Consolidated</c> bem-
+/// sucedido - independentemente do motivo pelo qual esteja faltando. Como a
+/// consolidação é idempotente, isso é sempre seguro de executar, mesmo que
+/// acabe reprocessando uma data sem necessidade.
 /// </summary>
 public sealed class ReconciliationWorker : BackgroundService
 {

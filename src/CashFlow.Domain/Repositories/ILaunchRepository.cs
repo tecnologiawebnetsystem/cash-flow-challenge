@@ -3,10 +3,10 @@ using CashFlow.Domain.Entities;
 namespace CashFlow.Domain.Repositories;
 
 /// <summary>
-/// Persistence abstraction for <see cref="Launch"/> aggregates.
-/// The Domain and Application layers depend only on this interface
-/// (Dependency Inversion Principle); Infrastructure provides the
-/// EF Core / PostgreSQL implementation.
+/// Abstração de persistência para os agregados <see cref="Launch"/>.
+/// As camadas de Domain e Application dependem apenas desta interface
+/// (Princípio da Inversão de Dependência); a Infrastructure fornece a
+/// implementação com EF Core / PostgreSQL.
 /// </summary>
 public interface ILaunchRepository
 {

@@ -3,9 +3,10 @@ using Xunit;
 namespace CashFlow.IntegrationTests;
 
 /// <summary>
-/// Shares a single containerized PostgreSQL + WebApplicationFactory across
-/// every test class in the "Api" collection, so the (relatively expensive)
-/// container startup happens once per test run instead of once per class.
+/// Compartilha uma única instância containerizada de PostgreSQL +
+/// WebApplicationFactory entre todas as classes de teste da coleção "Api",
+/// para que a inicialização do container (relativamente custosa) ocorra
+/// uma única vez por execução de testes, em vez de uma vez por classe.
 /// </summary>
 [CollectionDefinition(Name)]
 public class ApiCollectionFixture : ICollectionFixture<CustomWebApplicationFactory>

@@ -1,8 +1,8 @@
 namespace CashFlow.Domain.Enums;
 
 /// <summary>
-/// The nature of a cash flow launch (lançamento): a credit increases the
-/// balance, a debit decreases it.
+/// A natureza de um lançamento de fluxo de caixa: um crédito aumenta o
+/// saldo, um débito o diminui.
 /// </summary>
 public enum LaunchType
 {

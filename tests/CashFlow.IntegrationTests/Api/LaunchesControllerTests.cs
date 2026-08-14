@@ -21,9 +21,9 @@ public class LaunchesControllerTests
     [Fact]
     public async Task PostLaunch_ShouldReturnCreated_WithLocationHeader_WhenPayloadIsValid()
     {
-        // Each test uses a distinct, deterministic-but-unique date so that
-        // sequential runs against the shared container never collide on
-        // the same aggregate.
+        // Cada teste usa uma data distinta, determinística mas única, para
+        // que execuções sequenciais contra o container compartilhado nunca
+        // colidam no mesmo agregado.
         var launchDate = UniqueDate();
         var request = new RegisterLaunchRequest("Venda de mercadoria", 150.75m, LaunchType.Credit, launchDate);
 
@@ -82,9 +82,9 @@ public class LaunchesControllerTests
         launches.Should().NotContain(l => l.Description == "Lançamento de outro dia");
     }
 
-    // Spread across a wide historical range (rather than "today") so this
-    // suite never collides with dates used by the consolidation tests,
-    // which register launches for "today" and "yesterday".
+    // Distribuído em um amplo intervalo histórico (em vez de "hoje"), para
+    // que esta suíte nunca colida com as datas usadas pelos testes de
+    // consolidação, que registram lançamentos para "hoje" e "ontem".
     private static DateOnly UniqueDate() =>
         new DateOnly(2000, 1, 1).AddDays(Random.Shared.Next(1, 7300));
 }

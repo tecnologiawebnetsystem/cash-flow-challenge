@@ -3,9 +3,9 @@ using CashFlow.Domain.Enums;
 namespace CashFlow.Domain.Events;
 
 /// <summary>
-/// Raised whenever a new financial launch (lançamento) is registered.
-/// Consumers (e.g. the consolidation subsystem) react to this event
-/// without the Launch aggregate knowing anything about them (DIP).
+/// Disparado sempre que um novo lançamento financeiro é registrado.
+/// Consumidores (ex.: o subsistema de consolidação) reagem a este evento
+/// sem que o agregado Launch saiba nada sobre eles (DIP).
 /// </summary>
 public sealed class LaunchRegisteredEvent : IDomainEvent
 {

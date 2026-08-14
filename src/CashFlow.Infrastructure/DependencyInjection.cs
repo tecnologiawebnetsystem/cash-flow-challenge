@@ -12,17 +12,17 @@ using Microsoft.Extensions.Hosting;
 namespace CashFlow.Infrastructure;
 
 /// <summary>
-/// Composition root for every Infrastructure concern: persistence,
-/// messaging, background processing and the system clock. The Api project
-/// only calls <see cref="AddInfrastructure"/> - it never references EF
-/// Core, Npgsql or Polly directly.
+/// Raiz de composição para todas as preocupações de Infrastructure:
+/// persistência, mensageria, processamento em background e o relógio do
+/// sistema. O projeto Api apenas chama <see cref="AddInfrastructure"/> -
+/// ele nunca referencia EF Core, Npgsql ou Polly diretamente.
 /// </summary>
 public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         var connectionString = configuration.GetConnectionString("CashFlowDatabase")
-            ?? throw new InvalidOperationException("Connection string 'CashFlowDatabase' is not configured.");
+            ?? throw new InvalidOperationException("A connection string 'CashFlowDatabase' não está configurada.");
 
         services.AddDbContext<CashFlowDbContext>(options =>
             options.UseNpgsql(connectionString, npgsql =>
@@ -35,8 +35,9 @@ public static class DependencyInjection
 
         services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
 
-        // Single shared queue instance: producers (API requests) and the
-        // single consumer (ConsolidationWorker) must see the same channel.
+        // Uma única instância de fila compartilhada: os produtores
+        // (requisições da API) e o único consumidor (ConsolidationWorker)
+        // precisam ver o mesmo canal.
         services.AddSingleton<InMemoryConsolidationQueue>();
         services.AddSingleton<IConsolidationQueue>(sp => sp.GetRequiredService<InMemoryConsolidationQueue>());
 

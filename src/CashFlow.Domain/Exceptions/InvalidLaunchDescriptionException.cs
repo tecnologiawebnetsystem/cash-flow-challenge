@@ -3,7 +3,7 @@ namespace CashFlow.Domain.Exceptions;
 public sealed class InvalidLaunchDescriptionException : DomainException
 {
     public InvalidLaunchDescriptionException()
-        : base("Launch description must not be empty and must be at most 200 characters long.")
+        : base("A descrição do lançamento não pode ser vazia e deve ter no máximo 200 caracteres.")
     {
     }
 }

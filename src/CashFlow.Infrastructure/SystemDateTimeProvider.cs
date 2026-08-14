@@ -3,9 +3,9 @@ using CashFlow.Application.Common.Interfaces;
 namespace CashFlow.Infrastructure;
 
 /// <summary>
-/// Wraps <see cref="DateTime"/>/<see cref="DateOnly"/> statics behind an
-/// interface so Application code (and its unit tests) never depend on the
-/// system clock directly.
+/// Encapsula os métodos estáticos de <see cref="DateTime"/>/<see cref="DateOnly"/>
+/// atrás de uma interface, para que o código da Application (e seus testes
+/// de unidade) nunca dependam diretamente do relógio do sistema.
 /// </summary>
 public sealed class SystemDateTimeProvider : IDateTimeProvider
 {

@@ -6,21 +6,23 @@ using Polly.Retry;
 namespace CashFlow.Infrastructure.Resilience;
 
 /// <summary>
-/// Builds the resilience pipeline applied around every consolidation
-/// attempt. This is where the non-functional resilience requirement is
-/// implemented in infrastructure code, kept entirely out of the
-/// Application/Domain business logic (Single Responsibility Principle):
+/// Constrói o pipeline de resiliência aplicado em torno de cada tentativa
+/// de consolidação. É aqui que o requisito não funcional de resiliência é
+/// implementado em código de infraestrutura, mantido totalmente fora da
+/// lógica de negócio de Application/Domain (Princípio da Responsabilidade
+/// Única):
 ///
-///   - Retry: transient failures (e.g. a momentary database hiccup) are
-///     retried with exponential backoff + jitter instead of failing the
-///     whole batch immediately.
-///   - Circuit breaker: if failures persist, the breaker opens and fails
-///     fast for a cool-down window instead of piling up retries against an
-///     already struggling dependency, giving it room to recover.
+///   - Retry: falhas transitórias (ex.: uma instabilidade momentânea no
+///     banco de dados) são reexecutadas com backoff exponencial + jitter em
+///     vez de falhar o lote inteiro imediatamente.
+///   - Circuit breaker: se as falhas persistirem, o circuito abre e falha
+///     rapidamente (fail fast) durante uma janela de resfriamento, em vez
+///     de acumular retries contra uma dependência já sobrecarregada,
+///     dando a ela espaço para se recuperar.
 ///
-/// Because <see cref="ConsolidateDailyBalanceCommandHandler"/> is fully
-/// idempotent, retrying (or replaying later via reconciliation) is always
-/// safe - it never double-counts a launch.
+/// Como <see cref="ConsolidateDailyBalanceCommandHandler"/> é totalmente
+/// idempotente, reexecutar (ou reprocessar depois via reconciliação) é
+/// sempre seguro - nunca conta um lançamento em duplicidade.
 /// </summary>
 public static class ConsolidationResiliencePipelineFactory
 {

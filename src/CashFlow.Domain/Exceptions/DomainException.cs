@@ -1,8 +1,9 @@
 namespace CashFlow.Domain.Exceptions;
 
 /// <summary>
-/// Base type for every exception raised because a domain invariant was violated.
-/// The API layer maps this family to HTTP 422 (Unprocessable Entity).
+/// Tipo base para toda exceção lançada por violação de um invariante de
+/// domínio. A camada de Api mapeia esta família para HTTP 422
+/// (Unprocessable Entity).
 /// </summary>
 public abstract class DomainException : Exception
 {
