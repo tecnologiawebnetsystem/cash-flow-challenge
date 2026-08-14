@@ -5,11 +5,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CashFlow.Application;
 
-/// <summary>
-/// Ponto único de composição da camada de Application.
-/// Mantém a camada de Api livre de conhecimento sobre MediatR/FluentValidation,
-/// respeitando o princípio da Inversão de Dependência (SOLID - D).
-/// </summary>
 public static class DependencyInjection
 {
     public static IServiceCollection AddApplication(this IServiceCollection services)

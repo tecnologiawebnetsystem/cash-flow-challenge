@@ -5,12 +5,6 @@ using Xunit;
 
 namespace CashFlow.UnitTests.Application;
 
-/// <summary>
-/// Estes testes exercitam a fila diretamente (em vez de mocá-la) porque o
-/// seu comportamento de capacidade/back-pressure é a própria regra de
-/// negócio sob teste: o caminho de escrita nunca deve bloquear, e o
-/// excedente deve ser descartado em vez de armazenado sem limite.
-/// </summary>
 public class InMemoryConsolidationQueueTests
 {
     [Fact]
@@ -29,8 +23,6 @@ public class InMemoryConsolidationQueueTests
         var queue = new InMemoryConsolidationQueue(NullLogger<InMemoryConsolidationQueue>.Instance);
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
-        // Satura o canal limitado (capacidade documentada como 200) sem
-        // nunca esvaziá-lo, simulando uma indisponibilidade do consumidor.
         var results = new List<bool>();
         for (var i = 0; i < 500; i++)
         {
@@ -53,12 +45,6 @@ public class InMemoryConsolidationQueueTests
 
         using var cts = new CancellationTokenSource();
         var received = new List<DateOnly>();
-
-        // Cancelar o token durante a leitura é o mecanismo real usado para
-        // encerrar o worker no shutdown (ver ConsolidationWorker), e por
-        // contrato do IAsyncEnumerable isso propaga uma OperationCanceledException
-        // em vez de simplesmente finalizar o laço - por isso ela é esperada
-        // e tratada aqui, e não um efeito colateral indesejado.
         try
         {
             await foreach (var date in queue.ReadAllAsync(cts.Token))
@@ -72,7 +58,6 @@ public class InMemoryConsolidationQueueTests
         }
         catch (OperationCanceledException)
         {
-            // Esperado: é assim que sinalizamos o fim da leitura neste teste.
         }
 
         received.Should().Equal(day1, day2);

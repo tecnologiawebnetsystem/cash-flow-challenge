@@ -6,12 +6,6 @@ using CashFlow.Domain.ValueObjects;
 
 namespace CashFlow.Domain.Entities;
 
-/// <summary>
-/// Um único lançamento financeiro: um crédito ou um débito ocorrido em uma
-/// determinada data. Esta é a única fonte da verdade do fluxo de caixa - os
-/// saldos diários são sempre uma projeção derivada/consolidada dos
-/// lançamentos, nunca o contrário.
-/// </summary>
 public sealed class Launch : AggregateRoot
 {
     public string Description { get; private set; }
@@ -37,12 +31,6 @@ public sealed class Launch : AggregateRoot
         CreatedAtUtc = createdAtUtc;
     }
 
-    /// <summary>
-    /// Método de fábrica (encapsula os invariantes e garante que um Launch
-    /// nunca exista em estado inválido) que cria um novo lançamento e
-    /// dispara um <see cref="LaunchRegisteredEvent"/> para que assinantes
-    /// interessados (ex.: o subsistema de consolidação) possam reagir.
-    /// </summary>
     public static Launch Create(string description, decimal amount, LaunchType type, DateOnly launchDate, DateTime nowUtc)
     {
         var normalizedDescription = (description ?? string.Empty).Trim();
@@ -58,10 +46,5 @@ public sealed class Launch : AggregateRoot
 
         return launch;
     }
-
-    /// <summary>
-    /// A contribuição com sinal deste lançamento para um saldo diário:
-    /// positiva para créditos, negativa para débitos.
-    /// </summary>
     public decimal SignedAmount => Type == LaunchType.Credit ? Amount.Amount : -Amount.Amount;
 }

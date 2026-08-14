@@ -1,20 +1,11 @@
 namespace CashFlow.Domain.Common;
 
-/// <summary>
-/// Classe base para entidades com semântica de comparação por identidade.
-/// Entidades são comparadas pela identidade (Id), não pelos valores de seus
-/// atributos.
-/// </summary>
+
 public abstract class Entity
 {
     public Guid Id { get; protected init; }
 
-    /// <summary>
-    /// Construtor sem parâmetros exigido pelo materializador do EF Core.
-    /// Não é destinado ao uso direto pelo código da aplicação - sempre crie
-    /// entidades por meio de seus métodos de fábrica nomeados (ex.:
-    /// <c>Launch.Create</c>).
-    /// </summary>
+
     protected Entity()
     {
     }

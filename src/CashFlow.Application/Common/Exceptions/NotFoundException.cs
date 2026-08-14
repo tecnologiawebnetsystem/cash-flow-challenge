@@ -1,8 +1,6 @@
 namespace CashFlow.Application.Common.Exceptions;
 
-/// <summary>
-/// Lançada quando um recurso solicitado não existe. Mapeada para HTTP 404.
-/// </summary>
+
 public sealed class NotFoundException : Exception
 {
     public NotFoundException(string message) : base(message)

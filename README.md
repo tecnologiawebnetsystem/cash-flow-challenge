@@ -1,6 +1,6 @@
 # CashFlow API
 
-API REST para controle de fluxo de caixa de um pequeno comércio, desenvolvida como solução para o desafio técnico de desenvolvedor de software. A aplicação permite o registro de lançamentos (créditos e débitos) e disponibiliza o relatório de saldo diário consolidado, respeitando os requisitos de negócio, técnicos e não funcionais descritos no desafio.
+API REST para controle de fluxo de caixa de um pequeno comércio, desenvolvida pra um teste de desenvolvedor. A aplicação permite o registro de lançamentos (créditos e débitos) e disponibiliza o relatório de saldo diário consolidado, respeitando os requisitos de negócio, técnicos.
 
 ## Sumário
 

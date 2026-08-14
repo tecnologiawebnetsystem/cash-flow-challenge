@@ -11,12 +11,6 @@ using Microsoft.Extensions.Hosting;
 
 namespace CashFlow.Infrastructure;
 
-/// <summary>
-/// Raiz de composição para todas as preocupações de Infrastructure:
-/// persistência, mensageria, processamento em background e o relógio do
-/// sistema. O projeto Api apenas chama <see cref="AddInfrastructure"/> -
-/// ele nunca referencia EF Core, Npgsql ou Polly diretamente.
-/// </summary>
 public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
@@ -35,9 +29,6 @@ public static class DependencyInjection
 
         services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
 
-        // Uma única instância de fila compartilhada: os produtores
-        // (requisições da API) e o único consumidor (ConsolidationWorker)
-        // precisam ver o mesmo canal.
         services.AddSingleton<InMemoryConsolidationQueue>();
         services.AddSingleton<IConsolidationQueue>(sp => sp.GetRequiredService<InMemoryConsolidationQueue>());
 

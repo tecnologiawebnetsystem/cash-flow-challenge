@@ -2,11 +2,6 @@ using CashFlow.Domain.Enums;
 
 namespace CashFlow.Domain.Events;
 
-/// <summary>
-/// Disparado sempre que um novo lançamento financeiro é registrado.
-/// Consumidores (ex.: o subsistema de consolidação) reagem a este evento
-/// sem que o agregado Launch saiba nada sobre eles (DIP).
-/// </summary>
 public sealed class LaunchRegisteredEvent : IDomainEvent
 {
     public LaunchRegisteredEvent(Guid launchId, DateOnly launchDate, decimal amount, LaunchType type)

@@ -4,12 +4,7 @@ using ValidationException = CashFlow.Application.Common.Exceptions.ValidationExc
 
 namespace CashFlow.Application.Common.Behaviors;
 
-/// <summary>
-/// Behavior de pipeline do MediatR (padrão Decorator) que executa todos os
-/// validadores FluentValidation registrados para uma requisição antes que
-/// ela chegue ao seu handler. Preocupação transversal mantida fora dos
-/// próprios handlers (SRP).
-/// </summary>
+
 public sealed class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : IRequest<TResponse>
 {

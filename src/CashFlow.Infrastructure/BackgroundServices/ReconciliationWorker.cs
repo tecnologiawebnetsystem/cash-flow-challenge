@@ -6,19 +6,6 @@ using Microsoft.Extensions.Logging;
 
 namespace CashFlow.Infrastructure.BackgroundServices;
 
-/// <summary>
-/// Rede de segurança periódica que fecha a lacuna deixada pela fila de
-/// consolidação, que é best-effort e limitada: sob o pico de carga
-/// documentado (50 req/s, com até 5% de perda aceitável) um *sinal* de
-/// consolidação pode legitimamente ser descartado, e uma falha transitória
-/// pode esgotar todas as tentativas de retry.
-///
-/// Este worker reenfileira a consolidação para qualquer data que tenha
-/// lançamentos mas ainda não tenha um saldo diário <c>Consolidated</c> bem-
-/// sucedido - independentemente do motivo pelo qual esteja faltando. Como a
-/// consolidação é idempotente, isso é sempre seguro de executar, mesmo que
-/// acabe reprocessando uma data sem necessidade.
-/// </summary>
 public sealed class ReconciliationWorker : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromMinutes(5);

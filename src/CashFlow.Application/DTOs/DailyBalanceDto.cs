@@ -3,11 +3,7 @@ using CashFlow.Domain.Enums;
 
 namespace CashFlow.Application.DTOs;
 
-/// <summary>
-/// Projeção de leitura de <see cref="DailyBalance"/> exposta pela camada de
-/// Application. Mantém a Api desacoplada dos detalhes internos da entidade
-/// de domínio (ex.: <see cref="DailyBalance.RowVersion"/>).
-/// </summary>
+
 public sealed record DailyBalanceDto(
     DateOnly ReferenceDate,
     decimal TotalCredits,

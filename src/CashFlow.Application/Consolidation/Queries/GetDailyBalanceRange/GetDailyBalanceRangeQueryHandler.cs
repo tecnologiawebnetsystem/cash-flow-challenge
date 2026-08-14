@@ -4,10 +4,7 @@ using MediatR;
 
 namespace CashFlow.Application.Consolidation.Queries.GetDailyBalanceRange;
 
-/// <summary>
-/// Retorna o histórico de saldos diários consolidados dentro de um período,
-/// permitindo montar o relatório de fluxo de caixa consolidado.
-/// </summary>
+
 public sealed class GetDailyBalanceRangeQueryHandler
     : IRequestHandler<GetDailyBalanceRangeQuery, IReadOnlyList<DailyBalanceDto>>
 {
