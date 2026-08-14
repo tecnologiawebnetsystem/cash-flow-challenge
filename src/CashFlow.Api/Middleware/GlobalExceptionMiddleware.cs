@@ -5,12 +5,6 @@ using CashFlow.Domain.Exceptions;
 
 namespace CashFlow.Api.Middleware;
 
-/// <summary>
-/// Ponto único onde toda exceção não tratada é traduzida em uma resposta
-/// consistente no formato problem+json. Mantém as preocupações de
-/// mapeamento de erro totalmente fora dos controllers (Princípio da
-/// Responsabilidade Única).
-/// </summary>
 public sealed class GlobalExceptionMiddleware
 {
     private readonly RequestDelegate _next;

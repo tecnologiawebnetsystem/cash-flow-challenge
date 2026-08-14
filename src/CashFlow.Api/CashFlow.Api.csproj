@@ -6,13 +6,6 @@
     <Nullable>enable</Nullable>
     <RootNamespace>CashFlow.Api</RootNamespace>
     <UserSecretsId>c6f2a2fd-6a0a-4a4b-9c3e-cashflow-api</UserSecretsId>
-    <!--
-      Gera o arquivo XML de documentação a partir dos comentários ///
-      dos controllers, para que o Swagger UI exiba os resumos e as
-      descrições de cada resposta HTTP (ver IncludeXmlComments no
-      Program.cs). CS1591 é suprimido porque nem todo membro público
-      (ex.: construtores de DTO gerados) precisa de comentário XML próprio.
-    -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
@@ -20,11 +13,6 @@
   <ItemGroup>
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.9.0" />
     <PackageReference Include="AspNetCore.HealthChecks.NpgSql" Version="8.0.2" />
-    <!--
-      Necessário apenas em tempo de design para que a ferramenta `dotnet ef`
-      consiga gerar migrations a partir do projeto de inicialização (Api).
-      Não é usado em tempo de execução.
-    -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.10">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
