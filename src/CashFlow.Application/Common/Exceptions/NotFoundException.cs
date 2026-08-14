@@ -1,7 +1,7 @@
 namespace CashFlow.Application.Common.Exceptions;
 
 /// <summary>
-/// Thrown when a requested resource does not exist. Mapped to HTTP 404.
+/// Lançada quando um recurso solicitado não existe. Mapeada para HTTP 404.
 /// </summary>
 public sealed class NotFoundException : Exception
 {
@@ -10,5 +10,5 @@ public sealed class NotFoundException : Exception
     }
 
     public static NotFoundException ForDailyBalance(DateOnly date) =>
-        new($"No daily balance has been consolidated yet for {date:yyyy-MM-dd}.");
+        new($"Ainda não há saldo diário consolidado para {date:yyyy-MM-dd}.");
 }

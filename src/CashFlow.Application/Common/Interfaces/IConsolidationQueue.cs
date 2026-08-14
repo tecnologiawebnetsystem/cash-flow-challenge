@@ -1,23 +1,24 @@
 namespace CashFlow.Application.Common.Interfaces;
 
 /// <summary>
-/// Producer/consumer abstraction that decouples launch registration from
-/// daily balance consolidation. This is the core mechanism behind the
-/// non-functional resilience requirement: registering a launch never
-/// waits on - or fails because of - the consolidation subsystem.
+/// Abstração produtor/consumidor que desacopla o registro de lançamentos da
+/// consolidação do saldo diário. Este é o mecanismo central por trás do
+/// requisito não funcional de resiliência: registrar um lançamento nunca
+/// espera por - nem falha por causa de - o subsistema de consolidação.
 ///
-/// The queue is best-effort and bounded: under extreme burst load it may
-/// drop a "please consolidate this date" signal (see <see cref="TryEnqueue"/>
-/// return value), but that never loses financial data, because launches are
-/// always persisted synchronously regardless of the queue outcome, and
-/// consolidation itself is idempotent and periodically reconciled.
+/// A fila é best-effort e limitada: sob carga de pico extrema ela pode
+/// descartar um sinal de "por favor consolide esta data" (ver o retorno de
+/// <see cref="TryEnqueue"/>), mas isso nunca perde dados financeiros, pois
+/// os lançamentos são sempre persistidos de forma síncrona independentemente
+/// do resultado da fila, e a própria consolidação é idempotente e
+/// periodicamente reconciliada.
 /// </summary>
 public interface IConsolidationQueue
 {
     /// <summary>
-    /// Attempts to schedule a consolidation for <paramref name="date"/>.
-    /// Returns <c>false</c> when the queue is full and the request was
-    /// dropped instead of blocking the caller.
+    /// Tenta agendar uma consolidação para <paramref name="date"/>.
+    /// Retorna <c>false</c> quando a fila está cheia e a requisição foi
+    /// descartada em vez de bloquear quem chamou.
     /// </summary>
     bool TryEnqueue(DateOnly date);
 

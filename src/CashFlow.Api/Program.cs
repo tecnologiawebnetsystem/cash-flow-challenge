@@ -9,9 +9,9 @@ using Microsoft.OpenApi.Models;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers()
-    // Enums are exposed as their string names (e.g. "Credit"/"Debit")
-    // instead of raw numeric values, which is both more readable in the
-    // Swagger UI and less brittle for API consumers.
+    // Os enums são expostos pelo nome (ex.: "Credit"/"Debit") em vez do
+    // valor numérico bruto, o que é mais legível no Swagger UI e menos
+    // frágil para os consumidores da API.
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 builder.Services.AddApplication();
@@ -30,9 +30,9 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
-// Baseline security headers (defense-in-depth). This API has no browser UI,
-// so framing/CSP are irrelevant, but the transport/content-type hardening
-// still applies to every response.
+// Cabeçalhos de segurança básicos (defesa em profundidade). Esta API não
+// possui UI em navegador, então framing/CSP são irrelevantes, mas o
+// hardening de transporte/content-type ainda se aplica a toda resposta.
 app.Use(async (context, next) =>
 {
     context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
@@ -53,9 +53,9 @@ app.UseHttpsRedirection();
 app.MapControllers();
 app.MapHealthChecks("/health");
 
-// Applies pending EF Core migrations automatically on startup. Acceptable
-// for this challenge's scope; a production rollout would run migrations
-// as a separate release step instead.
+// Aplica automaticamente as migrations pendentes do EF Core na inicialização.
+// Aceitável para o escopo deste desafio; um deploy em produção executaria
+// as migrations como uma etapa de release separada.
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<CashFlowDbContext>();
@@ -64,5 +64,5 @@ using (var scope = app.Services.CreateScope())
 
 app.Run();
 
-// Exposed for WebApplicationFactory-based integration tests.
+// Exposto para os testes de integração baseados em WebApplicationFactory.
 public partial class Program;

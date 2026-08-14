@@ -1,9 +1,9 @@
 namespace CashFlow.Application.Common.Interfaces;
 
 /// <summary>
-/// Abstraction over the persistence transaction boundary. Application
-/// handlers commit through this interface without knowing whether the
-/// implementation is EF Core, Dapper, or anything else (DIP).
+/// Abstração sobre o limite da transação de persistência. Os handlers da
+/// Application confirmam (commit) através desta interface sem saber se a
+/// implementação é EF Core, Dapper ou qualquer outra tecnologia (DIP).
 /// </summary>
 public interface IUnitOfWork
 {
