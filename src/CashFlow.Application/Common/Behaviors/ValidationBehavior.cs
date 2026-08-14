@@ -1,13 +1,14 @@
-using CashFlow.Application.Common.Exceptions;
 using FluentValidation;
 using MediatR;
+using ValidationException = CashFlow.Application.Common.Exceptions.ValidationException;
 
 namespace CashFlow.Application.Common.Behaviors;
 
 /// <summary>
-/// MediatR pipeline behavior (Decorator pattern) that runs every registered
-/// FluentValidation validator for a request before it reaches its handler.
-/// Cross-cutting concern kept out of the handlers themselves (SRP).
+/// Behavior de pipeline do MediatR (padrão Decorator) que executa todos os
+/// validadores FluentValidation registrados para uma requisição antes que
+/// ela chegue ao seu handler. Preocupação transversal mantida fora dos
+/// próprios handlers (SRP).
 /// </summary>
 public sealed class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : IRequest<TResponse>

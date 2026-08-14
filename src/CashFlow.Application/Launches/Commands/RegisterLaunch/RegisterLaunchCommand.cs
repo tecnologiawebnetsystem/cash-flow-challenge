@@ -5,7 +5,7 @@ using MediatR;
 namespace CashFlow.Application.Launches.Commands.RegisterLaunch;
 
 /// <summary>
-/// Registers a new credit or debit launch (lançamento) in the cash flow.
+/// Registra um novo lançamento de crédito ou débito no fluxo de caixa.
 /// </summary>
 public sealed record RegisterLaunchCommand(
     string Description,

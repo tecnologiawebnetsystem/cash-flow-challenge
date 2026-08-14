@@ -1,10 +1,11 @@
 namespace CashFlow.Application.Common.Interfaces;
 
 /// <summary>
-/// Persists that consolidation failed for a given date after every retry
-/// attempt (and the circuit breaker, if applicable) was exhausted. Kept as
-/// its own narrow interface (Interface Segregation) so the background
-/// worker's failure path does not need the full command/query surface.
+/// Persiste que a consolidação falhou para uma determinada data, depois que
+/// toda tentativa de retry (e o circuit breaker, se aplicável) foi
+/// esgotada. Mantida como uma interface enxuta e específica (Interface
+/// Segregation) para que o caminho de falha do worker em background não
+/// precise de toda a superfície de comandos/consultas.
 /// </summary>
 public interface IConsolidationFailureRecorder
 {

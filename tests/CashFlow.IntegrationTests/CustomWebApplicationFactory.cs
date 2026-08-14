@@ -7,12 +7,12 @@ using Xunit;
 namespace CashFlow.IntegrationTests;
 
 /// <summary>
-/// Boots the real Api pipeline against a disposable, containerized
-/// PostgreSQL instance. Using a real database (instead of the EF Core
-/// InMemory provider) is intentional: this suite exercises the actual
-/// Npgsql provider, unique constraints, and concurrency tokens configured
-/// in CashFlow.Infrastructure, which the InMemory provider would silently
-/// ignore.
+/// Inicializa o pipeline real da Api contra uma instância descartável e
+/// containerizada do PostgreSQL. Usar um banco de dados real (em vez do
+/// provider InMemory do EF Core) é intencional: esta suíte exercita o
+/// provider Npgsql real, as restrições de unicidade e os tokens de
+/// concorrência configurados em CashFlow.Infrastructure, que o provider
+/// InMemory ignoraria silenciosamente.
 /// </summary>
 public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
@@ -33,9 +33,9 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
             });
         });
 
-        // No further overrides needed: Program.cs already applies pending
-        // EF Core migrations against whatever connection string is
-        // resolved at startup, which now points at the test container.
+        // Nenhuma outra sobrescrita é necessária: o Program.cs já aplica as
+        // migrations pendentes do EF Core contra a connection string
+        // resolvida na inicialização, que agora aponta para o container de teste.
     }
 
     public async Task InitializeAsync()

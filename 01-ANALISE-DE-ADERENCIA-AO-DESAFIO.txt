@@ -1,0 +1,175 @@
+================================================================================
+ ANALISE DE ADERENCIA AO DESAFIO (PDF "Papel do Desenvolvedor de Software")
+================================================================================
+
+Objetivo deste arquivo: comparar, item por item, o que o desafio pediu com o
+que existe de fato no codigo, para voce (candidato) conseguir responder com
+seguranca se o entrevistador perguntar "isso aqui foi implementado? onde?".
+
+Resumo do enunciado, em uma frase: construir uma API para um pequeno comercio
+registrar lancamentos financeiros (creditos e debitos) e consultar um
+relatorio de saldo diario consolidado, com o cuidado extra de que o registro
+de lancamentos NUNCA pode parar de funcionar, mesmo que a consolidacao do
+saldo falhe ou fique sobrecarregada.
+
+--------------------------------------------------------------------------------
+1. REQUISITOS FUNCIONAIS (o que o sistema precisa FAZER)
+--------------------------------------------------------------------------------
+
+[OK] Registrar um lancamento financeiro (credito ou debito)
+     Onde: POST /api/v1/launches
+     Codigo: LaunchesController.Register -> RegisterLaunchCommand ->
+     RegisterLaunchCommandHandler -> Launch.Register (fabrica na entidade).
+
+[OK] Consultar lancamentos de uma data
+     Onde: GET /api/v1/launches?date=AAAA-MM-DD
+     Codigo: LaunchesController.GetByDate -> GetLaunchesByDateQuery.
+
+[OK] Consolidar (calcular) o saldo diario a partir dos lancamentos
+     Onde: acontece automaticamente apos cada POST /api/v1/launches (o
+     handler enfileira um sinal de consolidacao para aquela data), e tambem
+     pode ser forcado manualmente via
+     POST /api/v1/daily-balances/{date}/consolidate.
+     Codigo: ConsolidateDailyBalanceCommandHandler soma todos os Launch
+     daquele dia (creditos - debitos) e grava/atualiza um DailyBalance.
+
+[OK] Consultar o relatorio de saldo diario consolidado
+     Onde: GET /api/v1/daily-balances/{date}          (um unico dia)
+           GET /api/v1/daily-balances?startDate=&endDate=  (intervalo,
+           que e o "relatorio" propriamente dito pedido no desafio)
+     Codigo: GetDailyBalanceQuery e GetDailyBalanceRangeQuery.
+
+--------------------------------------------------------------------------------
+2. REQUISITO NAO FUNCIONAL PRINCIPAL (o coracao do desafio)
+--------------------------------------------------------------------------------
+
+O PDF deixa claro que o ponto mais importante nao e so "fazer o CRUD", e sim:
+
+  "O subsistema de registro de lancamentos deve se manter disponivel mesmo
+   que o subsistema de consolidacao falhe ou fique sobrecarregado."
+
+Isso e um requisito classico de sistemas distribuidos: separar o caminho de
+ESCRITA critico (registrar lancamento) do caminho de PROCESSAMENTO pesado
+(consolidar saldo), para que um nao derrube o outro.
+
+Como isso foi resolvido no codigo (isto e o que voce PRECISA saber explicar):
+
+  1. Quando um lancamento e registrado, o handler NAO consolida o saldo na
+     hora, de forma sincrona, dentro da mesma requisicao HTTP. Ele apenas
+     grava o Launch no banco e devolve 201 Created imediatamente.
+
+  2. Depois de salvar, ele manda um "sinal" (apenas a data, um DateOnly)
+     para uma fila em memoria (InMemoryConsolidationQueue), que e um
+     System.Threading.Channels.Channel<DateOnly> com capacidade de 200
+     posicoes.
+
+  3. Essa fila usa TryWrite (escrita nao bloqueante). Se a fila estiver
+     cheia (200 sinais pendentes), o sinal e simplesmente descartado e a
+     requisicao de registro continua respondendo 201 normalmente - ela
+     NUNCA espera, NUNCA falha por causa da fila.
+
+  4. Um unico processo em background (ConsolidationWorker, um
+     BackgroundService do ASP.NET Core) le a fila continuamente e, para
+     cada data recebida, executa a consolidacao de fato, protegida por um
+     pipeline de resiliencia do Polly (retry com backoff exponencial +
+     circuit breaker).
+
+  5. Se mesmo com retry a consolidacao falhar, ou se o circuito estiver
+     aberto, o erro e registrado no proprio banco (DailyBalance com
+     Status = Failed e FailureReason preenchido) em vez de travar qualquer
+     coisa.
+
+  6. Como um sinal pode ser perdido (fila cheia) ou uma consolidacao pode
+     falhar de verdade, existe uma segunda rede de seguranca: o
+     ReconciliationWorker, outro BackgroundService que roda periodicamente
+     e procura por datas que tem lancamentos mas ainda nao tem um
+     DailyBalance com Status = Consolidated. Para essas datas, ele
+     reenfileira a consolidacao. Como consolidar e idempotente (pode
+     rodar quantas vezes quiser que o resultado final e o mesmo), isso e
+     sempre seguro.
+
+Resultado pratico: mesmo se voce conseguir "quebrar" a consolidacao (por
+exemplo, desligando o banco por alguns segundos), o endpoint de registrar
+lancamento continua respondendo 201 o tempo todo. Isso e literalmente o
+requisito nao funcional do desafio sendo cumprido, e e o argumento mais forte
+que voce tem para defender a solucao numa entrevista.
+
+--------------------------------------------------------------------------------
+3. REQUISITOS TECNICOS OBRIGATORIOS
+--------------------------------------------------------------------------------
+
+[OK] API REST                         -> ASP.NET Core Web API (.NET 8)
+[OK] Linguagem C# / .NET               -> C# 12 sobre .NET 8
+[OK] Persistencia em banco relacional  -> PostgreSQL 16 via EF Core + Npgsql
+[OK] Codigo versionado no Git          -> repositorio conectado (branch
+                                           desafio-de-software)
+[OK] Documentacao dos endpoints        -> Swagger / OpenAPI, com os
+                                           comentarios /// dos controllers
+                                           agora exportados para a UI (ver
+                                           02-COMO-TESTAR-A-API.txt)
+[OK] Validacao de entrada               -> FluentValidation, executado
+                                           automaticamente antes de cada
+                                           handler via ValidationBehavior
+                                           (pipeline do MediatR)
+[OK] Tratamento de erros consistente    -> GlobalExceptionMiddleware,
+                                           resposta padrao no formato
+                                           application/problem+json
+
+--------------------------------------------------------------------------------
+4. O QUE FOI ALEM DO MINIMO PEDIDO (pontos extras para citar na entrevista)
+--------------------------------------------------------------------------------
+
+- Clean Architecture com 4 camadas fisicamente separadas em projetos .csproj
+  diferentes (Domain, Application, Infrastructure, Api), forcando a regra de
+  dependencia via referencias de projeto (nao e so "pastas com nomes
+  bonitos": se voce tentar referenciar Infrastructure de dentro do Domain, o
+  projeto nem compila).
+- CQRS com MediatR separando comandos (escrita) de queries (leitura).
+- Circuit breaker + retry com Polly no processamento assincrono.
+- Controle de concorrencia otimista (RowVersion) no DailyBalance, para
+  evitar que duas consolidacoes concorrentes da mesma data se sobrescrevam
+  silenciosamente.
+- Idempotencia da consolidacao (rodar duas vezes para a mesma data nunca
+  duplica ou distorce o resultado).
+- Testes automatizados em duas camadas: unitarios (regras de negocio
+  isoladas) e de integracao (API real + Postgres real via Testcontainers).
+- Health check em GET /health, util para orquestradores (Docker/K8s) saberem
+  se a aplicacao esta de pe.
+- Ambiente 100% reprodutivel via Docker Compose (API + Postgres) com um
+  unico comando.
+
+--------------------------------------------------------------------------------
+5. PONTOS DE ATENCAO / LIMITACOES CONHECIDAS (seja honesto se perguntarem)
+--------------------------------------------------------------------------------
+
+- A fila de consolidacao e EM MEMORIA (System.Threading.Channels), nao um
+  message broker externo (RabbitMQ, Kafka, SQS...). Isso significa que se a
+  API reiniciar com sinais ainda na fila, esses sinais especificos se
+  perdem. Isso e mitigado pelo ReconciliationWorker (ele encontra essas
+  datas "esquecidas" e reprocessa), mas em um cenario de altissima escala
+  ou multi-instancia, o correto seria migrar para uma fila durável externa.
+  Vale a pena j mencionar isso proativamente numa entrevista: mostra que
+  voce entende o trade-off, nao que voce "esqueceu".
+- As migrations do EF Core sao aplicadas automaticamente na inicializacao
+  da API (Database.MigrateAsync em Program.cs). Isso e pratico para o
+  escopo do desafio e para rodar via Docker Compose com um comando so, mas
+  em um pipeline de producao real o ideal seria separar "aplicar migration"
+  de "subir a aplicacao" (etapas de deploy independentes).
+- Nao ha autenticacao/autorizacao (o desafio nao pede). Se perguntarem "e
+  seguranca?", a resposta correta e "o desafio nao exigiu, mas ja existem
+  headers de seguranca basicos (nosniff, referrer-policy) e o proximo passo
+  natural seria JWT/OAuth2 antes de ir para producao".
+- Nao ha cache (Redis, etc). Para o volume de dados de um pequeno comercio
+  isso nao e necessario; seria um proximo passo se o volume de consultas ao
+  relatorio de saldo crescesse muito.
+
+--------------------------------------------------------------------------------
+6. CONCLUSAO
+--------------------------------------------------------------------------------
+
+Todos os requisitos funcionais e o requisito nao funcional central do
+desafio (disponibilidade do registro de lancamentos, independente da
+consolidacao) estao implementados e cobertos por testes automatizados. As
+limitacoes listadas na secao 5 sao decisoes conscientes de escopo, nao
+lacunas por falta de conhecimento - e apresentar essa clareza sobre os
+trade-offs e exatamente o que costuma impressionar em uma entrevista tecnica.

@@ -4,8 +4,8 @@ using MediatR;
 namespace CashFlow.Application.Consolidation.Queries.GetDailyBalanceRange;
 
 /// <summary>
-/// Powers the "relatório de saldo diário consolidado": the list of daily
-/// balances for a date range, requested by the business.
+/// Alimenta o "relatório de saldo diário consolidado": a lista de saldos
+/// diários em um intervalo de datas, exigida pelo negócio.
 /// </summary>
 public sealed record GetDailyBalanceRangeQuery(DateOnly StartDate, DateOnly EndDate)
     : IRequest<IReadOnlyList<DailyBalanceDto>>;

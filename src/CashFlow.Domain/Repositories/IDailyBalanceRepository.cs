@@ -3,7 +3,7 @@ using CashFlow.Domain.Entities;
 namespace CashFlow.Domain.Repositories;
 
 /// <summary>
-/// Persistence abstraction for <see cref="DailyBalance"/> projections.
+/// Abstração de persistência para as projeções de <see cref="DailyBalance"/>.
 /// </summary>
 public interface IDailyBalanceRepository
 {
@@ -12,8 +12,9 @@ public interface IDailyBalanceRepository
     Task<IReadOnlyList<DailyBalance>> GetByDateRangeAsync(DateOnly startDate, DateOnly endDate, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Inserts the daily balance if none exists for its date yet, or updates
-    /// the existing one otherwise. Consolidation is idempotent by design.
+    /// Insere o saldo diário se ainda não existir um para a sua data, ou
+    /// atualiza o existente caso contrário. A consolidação é idempotente
+    /// por projeto.
     /// </summary>
     Task UpsertAsync(DailyBalance dailyBalance, CancellationToken cancellationToken);
 }

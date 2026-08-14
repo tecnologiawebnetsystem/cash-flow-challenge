@@ -8,8 +8,9 @@ using Microsoft.AspNetCore.Mvc;
 namespace CashFlow.Api.Controllers;
 
 /// <summary>
-/// Read surface for the consolidated daily balance report, plus a manual
-/// trigger endpoint useful for demos and operational recovery.
+/// Superfície de leitura do relatório de saldo diário consolidado, além de
+/// um endpoint de disparo manual útil para demonstrações e recuperação
+/// operacional.
 /// </summary>
 [ApiController]
 [Route("api/v1/daily-balances")]
@@ -23,9 +24,9 @@ public sealed class DailyBalancesController : ControllerBase
         _sender = sender;
     }
 
-    /// <summary>Gets the consolidated balance for a single date.</summary>
-    /// <response code="200">The consolidated balance for the date.</response>
-    /// <response code="404">No balance has been consolidated yet for that date.</response>
+    /// <summary>Obtém o saldo consolidado de uma única data.</summary>
+    /// <response code="200">O saldo consolidado da data informada.</response>
+    /// <response code="404">Ainda não há saldo consolidado para essa data.</response>
     [HttpGet("{date}")]
     [ProducesResponseType(typeof(DailyBalanceDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -36,10 +37,10 @@ public sealed class DailyBalancesController : ControllerBase
     }
 
     /// <summary>
-    /// Gets the consolidated daily balance report for a date range
-    /// (the "relatório de saldo diário consolidado" required by the business).
+    /// Obtém o relatório de saldo diário consolidado para um intervalo de
+    /// datas (o "relatório de saldo diário consolidado" exigido pelo negócio).
     /// </summary>
-    /// <response code="200">The list of consolidated balances in the range.</response>
+    /// <response code="200">A lista de saldos consolidados no intervalo.</response>
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<DailyBalanceDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<DailyBalanceDto>>> GetRange(
@@ -52,11 +53,12 @@ public sealed class DailyBalancesController : ControllerBase
     }
 
     /// <summary>
-    /// Forces a synchronous (re)consolidation of a given date. Intended for
-    /// demos and manual operational recovery - the normal flow consolidates
-    /// automatically and asynchronously whenever a launch is registered.
+    /// Força a (re)consolidação síncrona de uma data específica. Pensado
+    /// para demonstrações e recuperação operacional manual - o fluxo normal
+    /// consolida automaticamente e de forma assíncrona sempre que um
+    /// lançamento é registrado.
     /// </summary>
-    /// <response code="200">The freshly (re)consolidated balance.</response>
+    /// <response code="200">O saldo recém (re)consolidado.</response>
     [HttpPost("{date}/consolidate")]
     [ProducesResponseType(typeof(DailyBalanceDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<DailyBalanceDto>> Consolidate(DateOnly date, CancellationToken cancellationToken)

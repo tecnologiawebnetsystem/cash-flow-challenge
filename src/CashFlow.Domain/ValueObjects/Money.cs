@@ -4,23 +4,23 @@ using CashFlow.Domain.Exceptions;
 namespace CashFlow.Domain.ValueObjects;
 
 /// <summary>
-/// Represents the monetary amount of a single launch (lançamento).
-/// Immutable and self-validating: it is impossible to construct a
-/// <see cref="Money"/> instance with a value that is zero or negative,
-/// which keeps that invariant in a single place instead of scattered
-/// across the codebase.
+/// Representa o valor monetário de um único lançamento.
+/// Imutável e autovalidável: é impossível construir uma instância de
+/// <see cref="Money"/> com um valor zero ou negativo, o que mantém esse
+/// invariante em um único lugar em vez de espalhado pelo código.
 ///
-/// This type intentionally has no arithmetic operators (Add/Subtract):
-/// aggregated totals such as a daily balance's credits, debits and closing
-/// balance are legitimately zero or negative, so they are modeled as plain
-/// <see cref="decimal"/> on <see cref="Entities.DailyBalance"/> instead of
-/// forcing this stricter invariant onto them.
+/// Este tipo propositalmente não possui operadores aritméticos
+/// (Add/Subtract): totais agregados como os créditos, débitos e saldo de
+/// fechamento de um saldo diário são legitimamente zero ou negativos,
+/// então são modelados como <see cref="decimal"/> puro em
+/// <see cref="Entities.DailyBalance"/> em vez de forçar este invariante
+/// mais estrito sobre eles.
 /// </summary>
 public sealed class Money : ValueObject
 {
     public decimal Amount { get; private init; }
 
-    // Required by the EF Core materializer for the owned-type mapping.
+    // Necessário para materialização pelo EF Core no mapeamento de owned type.
     private Money()
     {
     }
@@ -37,7 +37,7 @@ public sealed class Money : ValueObject
             throw new InvalidLaunchAmountException(amount);
         }
 
-        // Guard against floating rounding surprises by normalizing to 2 decimal places.
+        // Protege contra surpresas de arredondamento de ponto flutuante, normalizando para 2 casas decimais.
         return new Money(decimal.Round(amount, 2, MidpointRounding.ToEven));
     }
 

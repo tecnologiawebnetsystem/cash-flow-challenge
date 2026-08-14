@@ -3,9 +3,10 @@ using CashFlow.Domain.Events;
 namespace CashFlow.Domain.Common;
 
 /// <summary>
-/// Base class for aggregate roots. An aggregate root is the only entry point
-/// through which its aggregate should be modified, and it is responsible for
-/// recording the domain events that occurred as a consequence of its behavior.
+/// Classe base para raízes de agregado (aggregate roots). Uma raiz de
+/// agregado é o único ponto de entrada pelo qual seu agregado deve ser
+/// modificado, e é responsável por registrar os eventos de domínio que
+/// ocorreram como consequência do seu comportamento.
 /// </summary>
 public abstract class AggregateRoot : Entity
 {

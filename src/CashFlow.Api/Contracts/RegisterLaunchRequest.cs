@@ -3,9 +3,10 @@ using CashFlow.Domain.Enums;
 namespace CashFlow.Api.Contracts;
 
 /// <summary>
-/// Api-facing request shape for registering a launch. Kept separate from
-/// <c>RegisterLaunchCommand</c> so the Application layer's contracts never
-/// leak HTTP/transport concerns (e.g. model binding attributes).
+/// Formato de requisição exposto pela Api para registrar um lançamento.
+/// Mantido separado do <c>RegisterLaunchCommand</c> para que os contratos
+/// da camada de Application nunca vazem preocupações de HTTP/transporte
+/// (ex.: atributos de model binding).
 /// </summary>
 public sealed record RegisterLaunchRequest(
     string Description,

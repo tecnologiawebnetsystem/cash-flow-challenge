@@ -1,8 +1,9 @@
 namespace CashFlow.Application.Common.Interfaces;
 
 /// <summary>
-/// Abstraction over system time so handlers stay deterministic and testable
-/// (no direct calls to DateTime.UtcNow / DateTime.Today scattered around).
+/// Abstração sobre o tempo do sistema para que os handlers permaneçam
+/// determinísticos e testáveis (sem chamadas diretas a DateTime.UtcNow /
+/// DateTime.Today espalhadas pelo código).
 /// </summary>
 public interface IDateTimeProvider
 {

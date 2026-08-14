@@ -1,8 +1,9 @@
 namespace CashFlow.Domain.Common;
 
 /// <summary>
-/// Base class for Value Objects. Value Objects are compared by their component
-/// values instead of identity, are immutable, and are self-validating.
+/// Classe base para Objetos de Valor (Value Objects). Objetos de Valor são
+/// comparados pelos valores de seus componentes em vez de por identidade,
+/// são imutáveis e se autovalidam.
 /// </summary>
 public abstract class ValueObject
 {

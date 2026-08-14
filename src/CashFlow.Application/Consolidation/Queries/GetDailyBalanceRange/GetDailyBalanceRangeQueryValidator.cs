@@ -8,10 +8,10 @@ public sealed class GetDailyBalanceRangeQueryValidator : AbstractValidator<GetDa
     {
         RuleFor(query => query.EndDate)
             .GreaterThanOrEqualTo(query => query.StartDate)
-            .WithMessage("EndDate must be greater than or equal to StartDate.");
+            .WithMessage("A data final deve ser maior ou igual à data inicial.");
 
         RuleFor(query => query)
             .Must(query => query.EndDate.DayNumber - query.StartDate.DayNumber <= 366)
-            .WithMessage("The date range cannot span more than 366 days.");
+            .WithMessage("O intervalo de datas não pode ser maior que 366 dias.");
     }
 }

@@ -4,9 +4,9 @@ using Microsoft.EntityFrameworkCore.Design;
 namespace CashFlow.Infrastructure.Persistence;
 
 /// <summary>
-/// Allows `dotnet ef migrations add` / `dotnet ef database update` to run
-/// from the CLI without needing to spin up the full Api host. Only used at
-/// design time.
+/// Permite que `dotnet ef migrations add` / `dotnet ef database update`
+/// sejam executados pela CLI sem precisar subir o host completo da Api.
+/// Usado apenas em tempo de design.
 /// </summary>
 public sealed class CashFlowDbContextFactory : IDesignTimeDbContextFactory<CashFlowDbContext>
 {

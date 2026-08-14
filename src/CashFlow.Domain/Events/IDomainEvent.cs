@@ -1,8 +1,9 @@
 namespace CashFlow.Domain.Events;
 
 /// <summary>
-/// Marker interface for domain events. Kept dependency-free (no MediatR reference)
-/// so the Domain layer remains framework-agnostic, per Clean Architecture rules.
+/// Interface marcadora para eventos de domínio. Mantida livre de dependências
+/// (sem referência ao MediatR) para que a camada de Domain permaneça
+/// agnóstica de framework, conforme as regras da Clean Architecture.
 /// </summary>
 public interface IDomainEvent
 {

@@ -7,10 +7,10 @@ using CashFlow.Domain.ValueObjects;
 namespace CashFlow.Domain.Entities;
 
 /// <summary>
-/// A single financial launch (lançamento): a credit or a debit that happened
-/// on a given date. This is the single source of truth for the cash flow -
-/// daily balances are always a derived/consolidated projection of launches,
-/// never the other way around.
+/// Um único lançamento financeiro: um crédito ou um débito ocorrido em uma
+/// determinada data. Esta é a única fonte da verdade do fluxo de caixa - os
+/// saldos diários são sempre uma projeção derivada/consolidada dos
+/// lançamentos, nunca o contrário.
 /// </summary>
 public sealed class Launch : AggregateRoot
 {
@@ -20,7 +20,7 @@ public sealed class Launch : AggregateRoot
     public DateOnly LaunchDate { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
 
-    // Required by the EF Core materializer.
+    // Necessário para materialização pelo EF Core.
     private Launch()
     {
         Description = string.Empty;
@@ -38,10 +38,10 @@ public sealed class Launch : AggregateRoot
     }
 
     /// <summary>
-    /// Factory method (encapsulates invariants and guarantees a Launch can
-    /// never exist in an invalid state) that creates a new launch and raises
-    /// a <see cref="LaunchRegisteredEvent"/> for interested subscribers
-    /// (e.g. the consolidation subsystem) to react to.
+    /// Método de fábrica (encapsula os invariantes e garante que um Launch
+    /// nunca exista em estado inválido) que cria um novo lançamento e
+    /// dispara um <see cref="LaunchRegisteredEvent"/> para que assinantes
+    /// interessados (ex.: o subsistema de consolidação) possam reagir.
     /// </summary>
     public static Launch Create(string description, decimal amount, LaunchType type, DateOnly launchDate, DateTime nowUtc)
     {
@@ -60,8 +60,8 @@ public sealed class Launch : AggregateRoot
     }
 
     /// <summary>
-    /// The signed contribution of this launch to a daily balance:
-    /// positive for credits, negative for debits.
+    /// A contribuição com sinal deste lançamento para um saldo diário:
+    /// positiva para créditos, negativa para débitos.
     /// </summary>
     public decimal SignedAmount => Type == LaunchType.Credit ? Amount.Amount : -Amount.Amount;
 }

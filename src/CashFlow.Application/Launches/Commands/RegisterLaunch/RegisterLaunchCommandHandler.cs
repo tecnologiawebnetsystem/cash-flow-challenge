@@ -8,12 +8,12 @@ using Microsoft.Extensions.Logging;
 namespace CashFlow.Application.Launches.Commands.RegisterLaunch;
 
 /// <summary>
-/// Handles registration of a new launch. This is the write path that must
-/// stay available and fast even when the consolidation subsystem is
-/// degraded or unavailable: the launch is persisted first (source of
-/// truth), and only afterwards is a best-effort signal sent to consolidate
-/// its date. A dropped signal never loses financial data - see
-/// <see cref="IConsolidationQueue"/>.
+/// Trata o registro de um novo lançamento. Este é o caminho de escrita que
+/// precisa permanecer disponível e rápido mesmo quando o subsistema de
+/// consolidação está degradado ou indisponível: o lançamento é persistido
+/// primeiro (fonte da verdade), e só depois um sinal best-effort é enviado
+/// para consolidar a sua data. Um sinal descartado nunca perde dados
+/// financeiros - ver <see cref="IConsolidationQueue"/>.
 /// </summary>
 public sealed class RegisterLaunchCommandHandler : IRequestHandler<RegisterLaunchCommand, LaunchDto>
 {
@@ -51,9 +51,10 @@ public sealed class RegisterLaunchCommandHandler : IRequestHandler<RegisterLaunc
         await _launchRepository.AddAsync(launch, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        // Best-effort, non-blocking: the launch is already durably persisted
-        // at this point, so failing to enqueue only delays visibility of the
-        // consolidated balance - it never loses the launch itself.
+        // Best-effort, não bloqueante: o lançamento já está persistido de
+        // forma durável neste ponto, então falhar ao enfileirar apenas
+        // atrasa a visibilidade do saldo consolidado - nunca perde o
+        // lançamento em si.
         if (!_consolidationQueue.TryEnqueue(launch.LaunchDate))
         {
             _logger.LogWarning(

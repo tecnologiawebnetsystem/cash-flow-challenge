@@ -6,10 +6,10 @@ using Xunit;
 namespace CashFlow.UnitTests.Application;
 
 /// <summary>
-/// These tests exercise the queue directly (rather than mocking it) because
-/// its capacity/back-pressure behavior is itself the business rule under
-/// test: the write path must never block, and overflow must be shed instead
-/// of buffered without bound.
+/// Estes testes exercitam a fila diretamente (em vez de mocá-la) porque o
+/// seu comportamento de capacidade/back-pressure é a própria regra de
+/// negócio sob teste: o caminho de escrita nunca deve bloquear, e o
+/// excedente deve ser descartado em vez de armazenado sem limite.
 /// </summary>
 public class InMemoryConsolidationQueueTests
 {
@@ -29,8 +29,8 @@ public class InMemoryConsolidationQueueTests
         var queue = new InMemoryConsolidationQueue(NullLogger<InMemoryConsolidationQueue>.Instance);
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
-        // Saturate the bounded channel (capacity is documented as 200)
-        // without ever draining it, simulating a consumer outage.
+        // Satura o canal limitado (capacidade documentada como 200) sem
+        // nunca esvaziá-lo, simulando uma indisponibilidade do consumidor.
         var results = new List<bool>();
         for (var i = 0; i < 500; i++)
         {
@@ -38,7 +38,7 @@ public class InMemoryConsolidationQueueTests
         }
 
         results.Should().Contain(true);
-        results.Should().Contain(false, "the queue must shed excess signals instead of growing without bound");
+        results.Should().Contain(false, "a fila deve descartar sinais excedentes em vez de crescer sem limite");
     }
 
     [Fact]
@@ -54,13 +54,25 @@ public class InMemoryConsolidationQueueTests
         using var cts = new CancellationTokenSource();
         var received = new List<DateOnly>();
 
-        await foreach (var date in queue.ReadAllAsync(cts.Token))
+        // Cancelar o token durante a leitura é o mecanismo real usado para
+        // encerrar o worker no shutdown (ver ConsolidationWorker), e por
+        // contrato do IAsyncEnumerable isso propaga uma OperationCanceledException
+        // em vez de simplesmente finalizar o laço - por isso ela é esperada
+        // e tratada aqui, e não um efeito colateral indesejado.
+        try
         {
-            received.Add(date);
-            if (received.Count == 2)
+            await foreach (var date in queue.ReadAllAsync(cts.Token))
             {
-                cts.Cancel();
+                received.Add(date);
+                if (received.Count == 2)
+                {
+                    cts.Cancel();
+                }
             }
+        }
+        catch (OperationCanceledException)
+        {
+            // Esperado: é assim que sinalizamos o fim da leitura neste teste.
         }
 
         received.Should().Equal(day1, day2);

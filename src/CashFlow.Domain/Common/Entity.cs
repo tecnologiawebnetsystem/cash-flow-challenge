@@ -1,17 +1,19 @@
 namespace CashFlow.Domain.Common;
 
 /// <summary>
-/// Base class for entities with identity comparison semantics.
-/// Entities are compared by identity (Id), not by their attribute values.
+/// Classe base para entidades com semântica de comparação por identidade.
+/// Entidades são comparadas pela identidade (Id), não pelos valores de seus
+/// atributos.
 /// </summary>
 public abstract class Entity
 {
     public Guid Id { get; protected init; }
 
     /// <summary>
-    /// Parameterless constructor required by the EF Core materializer.
-    /// Not intended for direct use by application code - always create
-    /// entities through their named factory methods (e.g. <c>Launch.Create</c>).
+    /// Construtor sem parâmetros exigido pelo materializador do EF Core.
+    /// Não é destinado ao uso direto pelo código da aplicação - sempre crie
+    /// entidades por meio de seus métodos de fábrica nomeados (ex.:
+    /// <c>Launch.Create</c>).
     /// </summary>
     protected Entity()
     {
@@ -21,7 +23,7 @@ public abstract class Entity
     {
         if (id == Guid.Empty)
         {
-            throw new ArgumentException("Entity identifier cannot be empty.", nameof(id));
+            throw new ArgumentException("O identificador da entidade não pode ser vazio.", nameof(id));
         }
 
         Id = id;

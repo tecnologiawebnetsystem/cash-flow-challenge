@@ -1,0 +1,184 @@
+================================================================================
+ TESTES EXPLICADOS - para responder em entrevista
+================================================================================
+
+O projeto tem DUAS suites de teste, cada uma com um objetivo diferente.
+Essa separacao em duas suites e ela mesma um ponto para citar em
+entrevista: testes de unidade e de integracao respondem perguntas
+diferentes e por isso vivem em projetos .csproj separados
+(CashFlow.UnitTests e CashFlow.IntegrationTests).
+
+--------------------------------------------------------------------------------
+1. TESTES DE UNIDADE - projeto tests/CashFlow.UnitTests
+--------------------------------------------------------------------------------
+
+PERGUNTA QUE ELES RESPONDEM: "a regra de negocio, isolada, esta correta?"
+
+Ferramentas usadas:
+  - xUnit          -> framework de testes (roda os [Fact]/[Theory]).
+  - FluentAssertions -> escreve as asserções de forma legivel, tipo
+                        "resultado.Should().Be(valorEsperado)" em vez de
+                        "Assert.Equal(valorEsperado, resultado)".
+  - Moq            -> cria "dublês" (mocks/fakes) de interfaces, para
+                        testar um Handler sem precisar de um banco de
+                        dados real por tras da interface ILaunchRepository,
+                        por exemplo.
+
+O que e testado, arquivo por arquivo:
+
+  Domain/MoneyTests.cs
+    -> Garante que Money.Create(0) e Money.Create(-10) lancam exception
+       (InvalidLaunchAmountException), e que valores validos sao aceitos e
+       arredondados corretamente (2 casas decimais).
+
+  Domain/LaunchTests.cs
+    -> Garante que Launch.Register(...) valida descricao (nao vazia, no
+       maximo 200 caracteres) e valor (> 0), e que o SignedAmount devolve
+       positivo para Credit e negativo para Debit.
+
+  Domain/DailyBalanceTests.cs
+    -> Garante que a logica de consolidacao calcula corretamente
+       total_credits, total_debits e closing_balance a partir de uma
+       lista de lancamentos, e que o status muda para Consolidated.
+
+  Application/RegisterLaunchCommandValidatorTests.cs
+    -> Testa as regras do FluentValidation isoladamente (descricao vazia
+       falha, valor negativo falha, data no futuro falha, etc.), sem
+       precisar rodar o handler inteiro.
+
+  Application/RegisterLaunchCommandHandlerTests.cs
+    -> Usa Moq para simular ILaunchRepository, IUnitOfWork e a fila de
+       consolidacao, e verifica que o handler: (a) chama o repositorio
+       para salvar, (b) chama o UnitOfWork para confirmar, e (c) enfileira
+       um sinal de consolidacao para a data certa - tudo isso SEM
+       precisar de um banco Postgres de verdade rodando.
+
+  Application/ConsolidateDailyBalanceCommandHandlerTests.cs
+    -> Mesma ideia, mas para o fluxo de consolidacao: simula um conjunto
+       de lancamentos vindo do repositorio (via Moq) e verifica que o
+       saldo calculado e salvo (upsert) esta correto.
+
+  Application/InMemoryConsolidationQueueTests.cs
+    -> Este e especial: testa a fila DE VERDADE (nao um mock), porque o
+       proprio comportamento da fila (nao bloquear, descartar quando
+       cheia) E a regra de negocio sob teste aqui. Ele satura a fila
+       (envia mais sinais do que a capacidade de 200) sem nunca
+       consumi-la, e confirma que os sinais excedentes sao descartados
+       (TryWrite devolve false) em vez de travar o processo ou crescer
+       sem limite.
+
+Como rodar so os testes de unidade:
+
+    dotnet test tests/CashFlow.UnitTests/CashFlow.UnitTests.csproj
+
+Nao precisam de Docker, Postgres, nem rede - rodam em memoria, em
+milissegundos, e podem rodar em qualquer maquina/pipeline de CI sem
+nenhuma configuracao extra.
+
+--------------------------------------------------------------------------------
+2. TESTES DE INTEGRACAO - projeto tests/CashFlow.IntegrationTests
+--------------------------------------------------------------------------------
+
+PERGUNTA QUE ELES RESPONDEM: "a API, de ponta a ponta, com um banco de
+dados Postgres REAL por tras, funciona como esperado?"
+
+Ferramentas usadas:
+  - Microsoft.AspNetCore.Mvc.Testing (WebApplicationFactory) -> sobe a API
+    inteira em memoria (sem precisar de uma porta de rede real), com todo
+    o pipeline de middlewares, controllers e injecao de dependencia
+    exatamente como em produção.
+  - Testcontainers.PostgreSql -> sobe um container Docker REAL de Postgres
+    16 so para a duracao dos testes, e derruba ao final. Por que um banco
+    real em vez do provider "InMemory" do EF Core? Porque o InMemory
+    ignora silenciosamente coisas como constraints de unicidade e o token
+    de concorrencia otimista (RowVersion) - testar contra eles de verdade
+    exige um Postgres de verdade por tras.
+  - Respawn -> depois de cada teste, limpa os dados das tabelas (sem
+    precisar destruir e recriar o banco inteiro), para que um teste nunca
+    interfira no proximo.
+
+Arquivos principais:
+
+  CustomWebApplicationFactory.cs
+    -> Configura a fabrica que sobe a API real conectada ao container de
+       Postgres do Testcontainers. As migrations do EF Core sao aplicadas
+       automaticamente (o mesmo Program.cs de produção ja faz isso).
+
+  ApiCollectionFixture.cs
+    -> Compartilha UM UNICO container Postgres + WebApplicationFactory
+       entre todas as classes de teste da colecao "Api", porque subir um
+       container Docker do zero para cada classe de teste seria lento.
+       Isso e feito com o recurso [CollectionDefinition] do xUnit.
+
+  Api/LaunchesControllerTests.cs
+    -> Faz requisicoes HTTP reais (via HttpClient da WebApplicationFactory)
+       contra POST /api/v1/launches e GET /api/v1/launches, verificando
+       os codigos de status (201, 400) e o conteudo das respostas.
+
+  Api/DailyBalancesControllerTests.cs
+    -> Testa o fluxo completo: registra lancamentos, chama o endpoint de
+       consolidacao manual, e confirma que o saldo calculado esta
+       correto. Tambem testa a IDEMPOTENCIA (consolidar a mesma data duas
+       vezes nunca duplica a linha nem distorce o total).
+
+Como rodar os testes de integracao:
+
+    dotnet test tests/CashFlow.IntegrationTests/CashFlow.IntegrationTests.csproj
+
+IMPORTANTE: esses testes PRECISAM de um Docker daemon disponivel na
+maquina (o Testcontainers usa o Docker para subir o container de Postgres
+sob demanda). Se o Docker nao estiver disponivel/rodando, esses testes vao
+falhar na inicializacao (nao por bug no codigo, mas por falta de ambiente).
+Isso e uma pergunta comum de entrevista: "por que os testes de integracao
+nao rodam em qualquer lugar?" - a resposta e essa, e e uma limitacao
+conhecida e aceita do uso de Testcontainers, nao um erro de configuracao.
+
+--------------------------------------------------------------------------------
+3. RODANDO TUDO DE UMA VEZ
+--------------------------------------------------------------------------------
+
+    dotnet test
+
+Isso roda as duas suites (se Docker estiver disponivel). Se so quiser
+confirmar rapidamente a regra de negocio sem depender de Docker, rode so
+o projeto CashFlow.UnitTests como mostrado na secao 1.
+
+--------------------------------------------------------------------------------
+4. A "PIRAMIDE DE TESTES" AQUI, EM UMA FRASE
+--------------------------------------------------------------------------------
+
+Muitos testes de unidade rapidos e isolados (regra de negocio pura, sem
+infraestrutura) na base, e um numero menor de testes de integracao mais
+lentos e mais realistas (API + banco de dados real) no topo, cobrindo os
+fluxos de ponta a ponta mais criticos (registrar lancamento, consolidar,
+consultar relatorio). Essa e a estrategia classica recomendada para
+manter a suite de testes rapida no dia a dia sem perder confianca sobre o
+comportamento real do sistema.
+
+--------------------------------------------------------------------------------
+5. PERGUNTAS DE ENTREVISTA SOBRE TESTES
+--------------------------------------------------------------------------------
+
+P: "Por que Moq nos testes de unidade e nao um banco de dados real?"
+R: Porque o objetivo desses testes e isolar a REGRA DE NEGOCIO do
+   handler/entidade, sem depender de infraestrutura externa. Isso os torna
+   rapidos (rodam em milissegundos) e determinísticos (nunca falham por
+   um problema de rede ou de configuracao de banco).
+
+P: "Por que nao usar so o provider InMemory do EF Core em vez de
+    Testcontainers?"
+R: Porque o InMemory nao aplica de verdade constraints, tipos de coluna
+   nem o token de concorrencia otimista (RowVersion) - ele simula um
+   "banco generico" que se comporta diferente do Postgres real em varios
+   detalhes. Testar contra o Postgres real (via Testcontainers) da muito
+   mais confianca de que o codigo funciona em produção, ao custo de ser
+   um pouco mais lento e exigir Docker.
+
+P: "Como voce testou a resiliencia (retry/circuit breaker) sem esperar
+    minutos?"
+R: A logica de resiliencia em si (o pipeline do Polly) e uma configuracao
+   de biblioteca ja testada e mantida pela comunidade - o foco dos testes
+   deste projeto foi garantir que o RESULTADO da consolidacao (idempotente,
+   nunca duplica) esta correto, e que a fila (Producer/Consumer) nunca
+   bloqueia o registro de lancamentos, que e testado diretamente em
+   InMemoryConsolidationQueueTests.cs.

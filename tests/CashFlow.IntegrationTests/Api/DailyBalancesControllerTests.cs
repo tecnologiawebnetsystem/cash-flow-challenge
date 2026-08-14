@@ -38,9 +38,9 @@ public class DailyBalancesControllerTests
         await _client.PostAsJsonAsync("/api/v1/launches",
             new RegisterLaunchRequest("Pagamento de fornecedor", 200m, LaunchType.Debit, date));
 
-        // The consolidation endpoint is invoked explicitly here rather than
-        // relying on the fire-and-forget background signal, so the test's
-        // outcome does not depend on background worker timing.
+        // O endpoint de consolidação é invocado explicitamente aqui em vez
+        // de depender do sinal de background fire-and-forget, para que o
+        // resultado do teste não dependa do timing do worker em background.
         var consolidateResponse = await _client.PostAsync($"/api/v1/daily-balances/{date:yyyy-MM-dd}/consolidate", content: null);
         consolidateResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -76,9 +76,9 @@ public class DailyBalancesControllerTests
         var secondBody = await second.Content.ReadFromJsonAsync<DailyBalanceDto>();
         secondBody!.ClosingBalance.Should().Be(1000m);
 
-        // Idempotency is verified by checking that re-consolidating never
-        // creates a duplicate row for the same date - the range query for
-        // that single day must still return exactly one entry.
+        // A idempotência é verificada checando que reconsolidar nunca cria
+        // uma linha duplicada para a mesma data - a consulta por intervalo
+        // para esse único dia deve continuar retornando exatamente uma entrada.
         var rangeResponse = await _client.GetAsync(
             $"/api/v1/daily-balances?startDate={date:yyyy-MM-dd}&endDate={date:yyyy-MM-dd}");
         var range = await rangeResponse.Content.ReadFromJsonAsync<List<DailyBalanceDto>>();
@@ -107,11 +107,12 @@ public class DailyBalancesControllerTests
         var balances = await response.Content.ReadFromJsonAsync<List<DailyBalanceDto>>();
         balances.Should().NotBeNull();
         balances!.Should().HaveCount(2);
-        balances.Select(b => b.ReferenceDate).Should().BeInAscendingOrder();
+        balances!.Select(b => b.ReferenceDate).Should().BeInAscendingOrder();
     }
 
-    // A wide, distinct historical range so this suite never collides with
-    // dates used by LaunchesControllerTests sharing the same container.
+    // Um intervalo histórico amplo e distinto, para que esta suíte nunca
+    // colida com as datas usadas por LaunchesControllerTests, que compartilha
+    // o mesmo container.
     private static DateOnly UniqueDate() =>
-        new(2010, 1, 1).AddDays(Random.Shared.Next(1, 3650));
+        new DateOnly(2010, 1, 1).AddDays(Random.Shared.Next(1, 3650));
 }

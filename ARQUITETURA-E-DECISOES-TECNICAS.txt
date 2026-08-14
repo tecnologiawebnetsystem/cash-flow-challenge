@@ -1,0 +1,394 @@
+CASHFLOW API - ARQUITETURA E DECISOES TECNICAS
+=================================================
+
+NOTA: este e o documento de referencia mais longo e narrativo do projeto.
+Para uma preparacao de entrevista mais rapida e dividida por assunto, veja
+tambem os arquivos numerados na raiz do repositorio, cada um focado em uma
+pergunta especifica que um entrevistador costuma fazer:
+
+  01-ANALISE-DE-ADERENCIA-AO-DESAFIO.txt  -> o que o PDF pediu x o que foi
+                                              entregue, item por item.
+  02-COMO-TESTAR-A-API.txt                -> como subir o projeto e testar
+                                              cada endpoint (Swagger/curl).
+  03-ARQUITETURA-EXPLICADA.txt            -> as 4 camadas explicadas de
+                                              forma resumida, em formato de
+                                              pergunta e resposta.
+  04-PADROES-DE-PROJETO-EXPLICADOS.txt    -> cada padrao de projeto usado,
+                                              o que e, onde esta, por que.
+  05-BANCO-DE-DADOS-EXPLICADO.txt         -> tabelas, colunas, indices e o
+                                              porque de cada decisao.
+  06-TESTES-EXPLICADOS.txt                -> as duas suites de teste, o
+                                              que cada uma cobre e como
+                                              rodar.
+
+Este documento descreve os padroes de projeto, a arquitetura escolhida e o
+motivo de cada decisao tomada durante o desenvolvimento do desafio. A ideia
+aqui nao e so listar "o que" foi usado, mas principalmente justificar o
+"por que", considerando o cenario descrito no enunciado: uma aplicacao que
+comecou pequena (controle de fluxo de caixa de um comercio) mas que tem
+potencial claro de crescer para outros modulos, e que tem um requisito nao
+funcional bem especifico e critico: o registro de lancamento nao pode parar
+nem ficar lento por causa da consolidacao do saldo diario, mesmo sob alta
+carga.
+
+
+1. VISAO GERAL DA ARQUITETURA
+-------------------------------
+
+Optei por estruturar o projeto em quatro camadas, seguindo os principios da
+Clean Architecture (Robert C. Martin):
+
+  CashFlow.Domain          -> regras de negocio puras, sem nenhuma
+                               dependencia externa
+  CashFlow.Application     -> casos de uso (o que o sistema faz), orquestra
+                               o Domain
+  CashFlow.Infrastructure  -> detalhes tecnicos (banco de dados, fila,
+                               workers, resiliencia)
+  CashFlow.Api             -> porta de entrada HTTP
+
+A regra principal da Clean Architecture e a regra de dependencia: as
+camadas mais internas (Domain) nunca podem depender das camadas mais
+externas (Infrastructure, Api). E sempre o contrario. Isso e garantido no
+projeto de duas formas: pela propria estrutura de referencias entre os
+.csproj (o Domain nao referencia nada, o Application so referencia o
+Domain, e assim por diante) e pelo uso de interfaces definidas dentro do
+Domain e da Application, que sao implementadas pela Infrastructure
+(Dependency Inversion Principle, o "D" do SOLID).
+
+Por que isso importa para este desafio especificamente? Porque o enunciado
+deixa claro que a aplicacao pode evoluir para outros modulos no futuro. Se
+eu tivesse colocado a logica de negocio dentro dos controllers ou
+misturada com o Entity Framework, qualquer mudanca de banco, de framework
+web ou a adicao de um novo modulo exigiria tocar em codigo de negocio ja
+validado e testado. Com a logica isolada no Domain e na Application, a
+Infrastructure e a Api podem mudar (ou se multiplicar, no caso de novos
+modulos) sem colocar em risco as regras que ja funcionam.
+
+
+2. POR QUE CQRS COM MEDIATR
+-----------------------------
+
+Dentro da camada Application, separei operacoes de escrita (Commands) das
+operacoes de leitura (Queries), seguindo o padrao CQRS (Command Query
+Responsibility Segregation). Por exemplo:
+
+  - RegisterLaunchCommand         -> escreve um novo lancamento
+  - GetLaunchesByDateQuery        -> le os lancamentos de uma data
+  - ConsolidateDailyBalanceCommand -> recalcula o saldo de uma data
+  - GetDailyBalanceQuery          -> le o saldo de uma data
+  - GetDailyBalanceRangeQuery     -> le o saldo de um intervalo de datas
+
+Cada Command/Query tem um Handler dedicado, que e a unica classe
+responsavel por aquele caso de uso especifico. Isso e o Single
+Responsibility Principle aplicado de forma bem literal: cada handler faz
+uma coisa e uma coisa so.
+
+Usei a biblioteca MediatR para implementar esse padrao porque ela resolve
+um problema pratico: sem ela, o controller precisaria conhecer e injetar
+diretamente cada handler (ou cada servico de aplicacao), o que cresce
+rapido conforme a aplicacao ganha casos de uso. Com o MediatR, o
+controller so precisa conhecer o IMediator e enviar um Command ou Query -
+o mediator resolve qual handler deve tratar aquela mensagem. Isso reduz o
+acoplamento entre a camada Api e a Application drasticamente, e e
+exatamente o tipo de escolha que facilita a adicao de novos modulos no
+futuro: um modulo novo so precisa adicionar seus proprios Commands,
+Queries e Handlers, sem qualquer necessidade de alterar os controllers ou
+handlers ja existentes de outros modulos (Open/Closed Principle).
+
+Outra vantagem pratica do MediatR e o suporte nativo a pipeline behaviors,
+que uso para dois comportamentos transversais (cross-cutting concerns):
+
+  - ValidationBehavior: intercepta toda Command/Query antes de chegar no
+    handler e executa os validadores do FluentValidation registrados para
+    aquele tipo. Se a validacao falhar, uma ValidationException e lancada
+    e o handler nunca e executado.
+  - LoggingBehavior: registra em log a execucao e o tempo de cada
+    Command/Query, e loga qualquer excecao nao tratada antes que ela suba
+    para a Api.
+
+Esse e o padrao Decorator classico: em vez de cada handler precisar
+implementar sua propria validacao e seu proprio logging (o que geraria
+duplicacao de codigo em cada um dos handlers), esse comportamento e
+"decorado" em volta de todos eles de forma automatica e centralizada.
+
+
+3. DOMAIN-DRIVEN DESIGN (NIVEL TATICO)
+-----------------------------------------
+
+Nao apliquei DDD estrategico completo (Bounded Contexts, Context Mapping
+etc.) porque seria over-engineering para o escopo atual - um unico modulo
+de fluxo de caixa. Mas usei os padroes taticos do DDD que fazem sentido
+mesmo em um dominio pequeno, porque eles sao o que garante a integridade
+dos dados financeiros, que e o ponto mais sensivel de qualquer sistema
+desse tipo.
+
+3.1. Entidades e Aggregate Root
+
+  Launch e a unica Aggregate Root do dominio. Uma Aggregate Root e o unico
+  ponto de entrada permitido para modificar um agregado - no caso, um
+  lancamento so pode ser criado atraves do metodo de fabrica estatico
+  Launch.Create(...), nunca atraves de um construtor publico com setters
+  livres. Isso garante que e impossivel existir, em qualquer lugar do
+  sistema, um Launch em estado invalido (por exemplo, com valor zero ou
+  negativo, ou com descricao vazia). A validacao do invariante fica em um
+  unico lugar, dentro da propria entidade, em vez de espalhada em cada
+  handler ou controller que cria um lancamento.
+
+3.2. Value Object (Money)
+
+  O valor monetario de um lancamento e representado pelo Value Object
+  Money, e nao por um decimal cru. A diferenca pratica: um decimal aceita
+  qualquer numero, inclusive zero ou negativo, sem nenhuma garantia. Money
+  so pode ser instanciado atraves de Money.Create(amount), que lanca
+  InvalidLaunchAmountException se o valor nao for estritamente positivo,
+  e normaliza o arredondamento para 2 casas decimais (evitando problemas
+  de representacao de ponto flutuante em valores financeiros). Um Value
+  Object e comparado pelo seu valor, nao por identidade/referencia - dois
+  Money de R$ 10,00 sao iguais entre si, o que nao seria verdade se
+  fossem comparados como duas instancias de referencia distintas.
+
+  Vale notar que Money nao tem operadores aritmeticos (nao existe
+  Money.Add ou Money.Subtract). Isso foi intencional: os totais agregados
+  de um saldo diario (total de creditos, total de debitos, saldo de
+  fechamento) sao legitimamente zero ou negativos - um dia sem nenhum
+  credito tem total de creditos zero, e um dia com mais despesas que
+  receitas tem saldo negativo. Forcar essas somas a passarem pelo
+  invariante "estritamente positivo" do Money quebraria a modelagem, por
+  isso o DailyBalance usa decimal puro para esses campos agregados.
+
+3.3. Eventos de dominio
+
+  Quando um Launch e criado, ele registra internamente um evento de
+  dominio, o LaunchRegisteredEvent. Isso segue o padrao Domain Events: a
+  entidade nao sabe (e nao precisa saber) quem vai reagir a esse evento -
+  ela apenas anuncia "um lancamento foi registrado". Quem consome esse
+  evento e decide o que fazer com ele e responsabilidade de outra camada.
+  Isso mantem o Domain desacoplado de qualquer preocupacao de
+  infraestrutura (como, por exemplo, avisar o subsistema de consolidacao).
+
+3.4. Excecoes de dominio
+
+  Toda violacao de regra de negocio (valor invalido, descricao invalida
+  etc.) lanca uma excecao que herda de DomainException. Isso permite que
+  o middleware global de tratamento de erros da Api mapeie qualquer
+  excecao dessa familia para HTTP 422 (Unprocessable Entity) de forma
+  generica, sem precisar de um catch especifico para cada tipo de erro de
+  negocio.
+
+
+4. REPOSITORY PATTERN E UNIT OF WORK
+---------------------------------------
+
+As interfaces ILaunchRepository e IDailyBalanceRepository sao definidas no
+Domain, mas implementadas na Infrastructure com Entity Framework Core. Essa
+e a aplicacao mais direta do Dependency Inversion Principle no projeto: a
+Application depende apenas da abstracao (a interface), nunca da
+implementacao concreta. Na pratica, isso significa que eu poderia troca o
+EF Core por Dapper, ou o PostgreSQL por outro banco, sem alterar uma linha
+de codigo dentro do Domain ou da Application - so a Infrastructure seria
+afetada.
+
+O IUnitOfWork encapsula o SaveChangesAsync do DbContext atras de uma
+interface. A motivacao e a mesma do Repository: os handlers da Application
+decidem quando confirmar a transacao (commit), mas nao sabem (e nao
+precisam saber) que por tras disso existe um DbContext do Entity Framework.
+
+
+5. O REQUISITO NAO FUNCIONAL MAIS CRITICO: DISPONIBILIDADE DO REGISTRO
+--------------------------------------------------------------------------
+
+Esse foi o ponto que mais exigiu cuidado no desenho da solucao, porque o
+enunciado e bem explicito: registrar um lancamento nao pode ficar lento ou
+indisponivel por causa da consolidacao diaria, mesmo com um pico de 50
+requisicoes por segundo.
+
+A decisao central foi: a consolidacao NUNCA acontece dentro da mesma
+requisicao HTTP que registra o lancamento. O fluxo e o seguinte:
+
+  1. RegisterLaunchCommandHandler persiste o Launch de forma sincrona
+     (isso e a fonte da verdade - o dado financeiro em si nunca pode se
+     perder).
+  2. Somente depois de confirmado o commit, o handler tenta avisar o
+     subsistema de consolidacao de que aquela data precisa ser
+     recalculada. Esse aviso e feito atraves de IConsolidationQueue.
+     TryEnqueue(data), que e uma operacao 100% nao bloqueante.
+  3. Se a fila estiver saturada (o que so acontece sob uma carga
+     sustentada muito acima do pico documentado), TryEnqueue retorna
+     false, o evento e apenas logado como aviso e a requisicao HTTP segue
+     seu fluxo normal e retorna 201 Created para o cliente. O lancamento
+     JA FOI salvo no passo 1 - o unico efeito de perder esse sinal e que
+     o saldo consolidado daquela data vai demorar um pouco mais para
+     refletir esse lancamento.
+
+Para implementar essa fila, usei System.Threading.Channels (a API nativa
+do .NET para producer/consumer em memoria), configurada como um canal
+limitado (bounded channel) com capacidade fixa. A escolha de nao usar um
+broker de mensagens externo (RabbitMQ, SQS, Azure Service Bus) para esse
+desafio foi deliberada: para o escopo de uma unica instancia da aplicacao,
+uma fila em memoria resolve o problema com muito menos complexidade
+operacional (sem infraestrutura extra para provisionar, configurar e
+manter), e a interface IConsolidationQueue foi desenhada justamente para
+isolar essa decisao - se no futuro a aplicacao precisar escalar
+horizontalmente em varias instancias, basta trocar a implementacao por um
+broker real, sem tocar em nenhum Handler da Application.
+
+Um detalhe tecnico que vale registrar: ao configurar o bounded channel,
+o modo de descarte precisa ser BoundedChannelFullMode.Wait (usado em
+conjunto com TryWrite, nunca com WriteAsync). Pode parecer contraintuitivo
+a primeira vista, porque existe uma opcao chamada DropWrite que parece
+"a escolha obvia" pelo nome. Mas a documentacao do proprio .NET deixa
+claro que, no modo DropWrite, o TryWrite sempre retorna true (ele descarta
+o item mais antigo da fila internamente, nunca rejeita a escrita atual).
+Isso quebraria silenciosamente o contrato que o resto do sistema depende
+("TryEnqueue retorna false quando a fila esta saturada") e faria com que
+o aviso de saturacao nunca fosse logado. Com Wait + TryWrite, o
+comportamento e o esperado: a chamada nunca bloqueia (porque TryWrite
+nunca espera, independente do modo configurado) e retorna false de forma
+confiavel quando a capacidade e excedida.
+
+Do lado do consumo, um unico BackgroundService dedicado (ConsolidationWorker)
+consome essa fila fora do ciclo de vida de qualquer requisicao HTTP. Cada
+data retirada da fila e processada atraves de um pipeline de resiliencia
+construido com a biblioteca Polly, combinando:
+
+  - Retry com backoff exponencial: absorve falhas transitorias (por
+    exemplo, uma instabilidade momentanea de conexao com o banco) sem
+    desistir na primeira tentativa.
+  - Circuit Breaker: se as falhas persistirem alem de um limite, o
+    circuito abre e passa a falhar rapido (fail fast) por uma janela de
+    tempo, em vez de continuar bombardeando uma dependencia que ja esta
+    com problema - dando espaco para ela se recuperar.
+
+Se mesmo assim todas as tentativas se esgotarem, a falha e registrada no
+proprio DailyBalance daquela data (status Failed), em vez de ser
+silenciosamente perdida.
+
+Por fim, existe uma segunda camada de seguranca: o ReconciliationWorker,
+que roda periodicamente e verifica se existe alguma data com lancamentos
+mas sem um saldo diario com status Consolidated - independente do motivo
+(sinal descartado por saturacao da fila, falha que esgotou os retries,
+reinicio do processo antes de processar a fila etc.). Esse worker
+reenfileira a consolidacao dessas datas. Isso funciona como rede de
+seguranca final: mesmo no pior cenario, o sistema converge para o estado
+correto sem intervencao manual.
+
+Um ponto que amarra toda essa estrategia e a IDEMPOTENCIA da consolidacao:
+o ConsolidateDailyBalanceCommandHandler sempre recalcula o saldo do zero,
+somando todos os lancamentos daquela data, e faz um upsert no
+DailyBalance correspondente. Isso significa que rodar a consolidacao da
+mesma data duas, tres ou dez vezes sempre produz o mesmo resultado final -
+nunca gera duplicidade, nunca soma um lancamento duas vezes. E exatamente
+essa propriedade que torna seguro reprocessar (via retry, via
+reconciliacao periodica, ou via chamada manual ao endpoint de
+consolidacao forcada) sem nenhum risco de inconsistencia.
+
+
+6. VALIDACAO COM FLUENTVALIDATION
+-------------------------------------
+
+Optei por FluentValidation em vez de Data Annotations (os atributos
+[Required], [Range] etc. do .NET) por alguns motivos praticos:
+
+  - Mantem as regras de validacao fora do Domain e fora dos contratos de
+    entrada, como classes dedicadas e testaveis isoladamente
+    (RegisterLaunchCommandValidator, GetDailyBalanceRangeQueryValidator).
+  - Permite regras mais expressivas, incluindo validacoes que dependem de
+    mais de um campo ao mesmo tempo, como a checagem de que o intervalo
+    de datas do relatorio de saldo diario nao pode ser maior que 366
+    dias.
+  - Se integra nativamente ao pipeline do MediatR atraves do
+    ValidationBehavior, centralizando esse comportamento sem que cada
+    handler precise chamar validacao manualmente.
+
+Vale destacar a diferenca entre validacao (FluentValidation, na camada
+Application) e invariante de dominio (excecoes de dominio, no Domain).
+Validacao trata de formato e regras de entrada de um caso de uso
+especifico ("a descricao nao pode ter mais de 200 caracteres para este
+Command"); invariante de dominio trata de uma regra que a entidade jamais
+pode violar em qualquer circunstancia ("um Money nunca pode ser zero ou
+negativo"). Sao camadas de proteção diferentes e complementares.
+
+
+7. TRATAMENTO DE ERROS CENTRALIZADO
+---------------------------------------
+
+Em vez de cada controller ter seus proprios blocos try/catch, criei um
+unico GlobalExceptionMiddleware que intercepta qualquer excecao nao
+tratada em qualquer ponto do pipeline HTTP e a traduz para uma resposta
+padronizada no formato problem+json, com o status HTTP correto:
+
+  - ValidationException (FluentValidation)  -> 400 Bad Request
+  - NotFoundException                       -> 404 Not Found
+  - DomainException (e subclasses)          -> 422 Unprocessable Entity
+  - Qualquer outra excecao nao mapeada      -> 500 Internal Server Error
+
+Isso e o Single Responsibility Principle aplicado ao tratamento de erros:
+os controllers ficam extremamente simples (so traduzem HTTP em Command/
+Query e retornam o resultado), sem nenhuma preocupacao de mapeamento de
+excecao, porque essa responsabilidade esta isolada em um unico lugar.
+
+
+8. POR QUE POSTGRESQL E TESTCONTAINERS
+------------------------------------------
+
+O PostgreSQL foi escolhido por ser um banco relacional robusto, gratuito e
+com excelente suporte no ecossistema .NET via Npgsql, alem de ser
+totalmente compativel com Docker, o que facilita a reproducao do ambiente
+em qualquer maquina.
+
+Para os testes de integracao, em vez de usar o provider InMemory do
+proprio Entity Framework Core, optei por usar Testcontainers, que sobe um
+container real e descartavel de PostgreSQL a cada execucao da suite de
+testes. A razao e simples: o provider InMemory nao aplica nem valida
+constraints de unicidade, indices ou o comportamento real do Npgsql - ele
+simula um banco de dados de forma simplificada demais para dar confianca
+real sobre o comportamento em produção. Testar contra um PostgreSQL real
+(ainda que efemero) garante que as migrations, os mapeamentos do EF Core e
+as constraints do banco estao realmente corretos.
+
+
+9. RESUMO DOS PADROES DE PROJETO UTILIZADOS
+------------------------------------------------
+
+  - Clean Architecture           -> separacao em camadas com regra de
+                                     dependencia unidirecional
+  - CQRS                         -> separacao entre Commands (escrita) e
+                                     Queries (leitura)
+  - Mediator (MediatR)           -> desacopla a Api dos Handlers de caso
+                                     de uso
+  - Decorator (pipeline behaviors) -> validacao e logging aplicados de
+                                     forma transversal a todos os
+                                     Commands/Queries
+  - Repository                   -> abstrai a persistencia por tras de
+                                     interfaces
+  - Unit of Work                 -> abstrai o commit da transacao
+  - Aggregate Root / Entity      -> Launch como unico ponto de entrada
+                                     para modificacao do agregado
+  - Value Object                 -> Money, imutavel e autovalidavel
+  - Domain Events                -> LaunchRegisteredEvent, desacopla o
+                                     Domain de quem reage ao evento
+  - Factory Method               -> Launch.Create / Money.Create,
+                                     garantem que a entidade nunca exista
+                                     em estado invalido
+  - Producer/Consumer            -> fila de consolidacao em memoria
+                                     (System.Threading.Channels)
+  - Retry + Circuit Breaker      -> resiliencia da consolidacao via Polly
+  - Dependency Injection / DIP   -> em toda a base, via interfaces
+                                     definidas nas camadas internas
+
+
+10. CONSIDERACOES FINAIS
+----------------------------
+
+Todas as escolhas acima foram guiadas por um mesmo fio condutor: o
+enunciado do desafio nao pede apenas "um CRUD de lancamentos com soma de
+saldo" - ele pede uma solucao que se comporte bem sob carga, que nao perca
+dados financeiros em nenhum cenario de falha parcial, e que tenha espaco
+para crescer em complexidade (novos modulos) sem precisar ser reescrita.
+Por isso o esforco de desenho foi concentrado principalmente em tres
+frentes: isolar corretamente as regras de negocio (Domain/DDD), organizar
+os casos de uso de forma que a aplicacao possa crescer sem acoplamento
+(CQRS + Mediator + Clean Architecture) e resolver de forma concreta e
+testada o requisito de disponibilidade do registro de lancamento mesmo sob
+falha ou pico de carga (fila em memoria + workers + Polly +
+reconciliacao periodica + idempotencia).

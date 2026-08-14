@@ -5,9 +5,9 @@ using Microsoft.Extensions.Logging;
 namespace CashFlow.Application.Common.Behaviors;
 
 /// <summary>
-/// MediatR pipeline behavior (Decorator pattern) that logs the execution
-/// and timing of every command/query, and surfaces unhandled exceptions
-/// with full request context before they bubble up.
+/// Behavior de pipeline do MediatR (padrão Decorator) que registra a
+/// execução e o tempo de cada comando/consulta, e expõe exceções não
+/// tratadas com o contexto completo da requisição antes que se propaguem.
 /// </summary>
 public sealed class LoggingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : IRequest<TResponse>

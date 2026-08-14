@@ -3,13 +3,14 @@ using FluentValidation.Results;
 namespace CashFlow.Application.Common.Exceptions;
 
 /// <summary>
-/// Thrown by <c>ValidationBehavior</c> when one or more FluentValidation
-/// rules fail for an incoming command/query. The API layer maps this to
-/// HTTP 400 (Bad Request) with a field-level error payload.
+/// Lançada pelo <c>ValidationBehavior</c> quando uma ou mais regras do
+/// FluentValidation falham para um comando/consulta de entrada. A camada
+/// de Api mapeia isso para HTTP 400 (Bad Request) com um payload de erros
+/// por campo.
 /// </summary>
 public sealed class ValidationException : Exception
 {
-    public ValidationException(IEnumerable<ValidationFailure> failures) : base("One or more validation failures occurred.")
+    public ValidationException(IEnumerable<ValidationFailure> failures) : base("Ocorreram uma ou mais falhas de validação.")
     {
         Errors = failures
             .GroupBy(failure => failure.PropertyName, failure => failure.ErrorMessage)

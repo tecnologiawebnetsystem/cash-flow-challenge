@@ -11,17 +11,17 @@ using Polly.CircuitBreaker;
 namespace CashFlow.Infrastructure.BackgroundServices;
 
 /// <summary>
-/// Single background consumer of the consolidation queue. Runs entirely out
-/// of the request path of <c>POST /launches</c>, which is the mechanism
-/// behind the "the launch subsystem must stay up even if consolidation
-/// fails" non-functional requirement.
+/// Único consumidor em background da fila de consolidação. Executa
+/// totalmente fora do caminho da requisição de <c>POST /launches</c>, que é
+/// o mecanismo por trás do requisito não funcional "o subsistema de
+/// lançamentos deve permanecer disponível mesmo se a consolidação falhar".
 ///
-/// Each dequeued date is processed through a resilience pipeline
-/// (retry + circuit breaker, see <see cref="ConsolidationResiliencePipelineFactory"/>).
-/// If every attempt is exhausted or the circuit is open, the failure is
-/// recorded on the corresponding <c>DailyBalance</c> row instead of being
-/// silently lost, and <see cref="ReconciliationWorker"/> will retry it on
-/// its next pass.
+/// Cada data retirada da fila é processada por um pipeline de resiliência
+/// (retry + circuit breaker, ver <see cref="ConsolidationResiliencePipelineFactory"/>).
+/// Se todas as tentativas se esgotarem ou o circuito estiver aberto, a
+/// falha é registrada na linha correspondente de <c>DailyBalance</c> em vez
+/// de ser silenciosamente perdida, e o <see cref="ReconciliationWorker"/>
+/// tentará novamente na sua próxima passada.
 /// </summary>
 public sealed class ConsolidationWorker : BackgroundService
 {
@@ -52,7 +52,7 @@ public sealed class ConsolidationWorker : BackgroundService
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
-            // Expected during graceful shutdown.
+            // Esperado durante o encerramento gracioso (graceful shutdown).
         }
     }
 
@@ -96,9 +96,9 @@ public sealed class ConsolidationWorker : BackgroundService
         }
         catch (Exception ex)
         {
-            // Recording the failure is itself best-effort: if even this
-            // fails, the periodic reconciliation job is the final safety
-            // net, since it does not depend on a Failed row existing.
+            // Registrar a falha também é best-effort: se até isso falhar,
+            // o job periódico de reconciliação é a rede de segurança final,
+            // já que ele não depende da existência de uma linha Failed.
             _logger.LogError(ex, "Failed to persist failure state for {Date}.", date);
         }
     }

@@ -6,9 +6,10 @@ using CashFlow.Domain.Exceptions;
 namespace CashFlow.Api.Middleware;
 
 /// <summary>
-/// Single place where every unhandled exception is translated into a
-/// consistent problem+json-shaped response. Keeps error-mapping concerns
-/// out of controllers entirely (Single Responsibility Principle).
+/// Ponto único onde toda exceção não tratada é traduzida em uma resposta
+/// consistente no formato problem+json. Mantém as preocupações de
+/// mapeamento de erro totalmente fora dos controllers (Princípio da
+/// Responsabilidade Única).
 /// </summary>
 public sealed class GlobalExceptionMiddleware
 {
@@ -39,7 +40,7 @@ public sealed class GlobalExceptionMiddleware
 
         if (statusCode == HttpStatusCode.InternalServerError)
         {
-            _logger.LogError(exception, "Unhandled exception processing {Path}.", context.Request.Path);
+            _logger.LogError(exception, "Exceção não tratada ao processar {Path}.", context.Request.Path);
         }
         else
         {
@@ -67,9 +68,9 @@ public sealed class GlobalExceptionMiddleware
 
     private static (HttpStatusCode StatusCode, string Title) MapException(Exception exception) => exception switch
     {
-        ValidationException => (HttpStatusCode.BadRequest, "One or more validation errors occurred."),
-        NotFoundException => (HttpStatusCode.NotFound, "Resource not found."),
-        DomainException => (HttpStatusCode.UnprocessableEntity, "Business rule violation."),
-        _ => (HttpStatusCode.InternalServerError, "An unexpected error occurred."),
+        ValidationException => (HttpStatusCode.BadRequest, "Ocorreram um ou mais erros de validação."),
+        NotFoundException => (HttpStatusCode.NotFound, "Recurso não encontrado."),
+        DomainException => (HttpStatusCode.UnprocessableEntity, "Violação de regra de negócio."),
+        _ => (HttpStatusCode.InternalServerError, "Ocorreu um erro inesperado."),
     };
 }
