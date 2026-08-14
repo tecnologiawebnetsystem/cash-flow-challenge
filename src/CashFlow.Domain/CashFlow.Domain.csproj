@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>CashFlow.Domain</RootNamespace>
+    <!-- The Domain layer has zero external dependencies on purpose (DDD / Clean Architecture rule). -->
+  </PropertyGroup>
+
+</Project>

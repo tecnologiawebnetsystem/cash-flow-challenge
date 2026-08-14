@@ -1,0 +1,23 @@
+## .NET
+bin/
+obj/
+out/
+*.user
+*.userosscache
+*.sln.docstates
+
+## Rider / VS / VS Code
+.vs/
+.vscode/
+.idea/
+*.suo
+
+## Test results
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+
+## Misc
+.env
+*.log
