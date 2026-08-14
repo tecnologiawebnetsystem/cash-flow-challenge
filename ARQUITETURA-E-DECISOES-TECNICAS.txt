@@ -1,6 +1,26 @@
 CASHFLOW API - ARQUITETURA E DECISOES TECNICAS
 =================================================
 
+NOTA: este e o documento de referencia mais longo e narrativo do projeto.
+Para uma preparacao de entrevista mais rapida e dividida por assunto, veja
+tambem os arquivos numerados na raiz do repositorio, cada um focado em uma
+pergunta especifica que um entrevistador costuma fazer:
+
+  01-ANALISE-DE-ADERENCIA-AO-DESAFIO.txt  -> o que o PDF pediu x o que foi
+                                              entregue, item por item.
+  02-COMO-TESTAR-A-API.txt                -> como subir o projeto e testar
+                                              cada endpoint (Swagger/curl).
+  03-ARQUITETURA-EXPLICADA.txt            -> as 4 camadas explicadas de
+                                              forma resumida, em formato de
+                                              pergunta e resposta.
+  04-PADROES-DE-PROJETO-EXPLICADOS.txt    -> cada padrao de projeto usado,
+                                              o que e, onde esta, por que.
+  05-BANCO-DE-DADOS-EXPLICADO.txt         -> tabelas, colunas, indices e o
+                                              porque de cada decisao.
+  06-TESTES-EXPLICADOS.txt                -> as duas suites de teste, o
+                                              que cada uma cobre e como
+                                              rodar.
+
 Este documento descreve os padroes de projeto, a arquitetura escolhida e o
 motivo de cada decisao tomada durante o desenvolvimento do desafio. A ideia
 aqui nao e so listar "o que" foi usado, mas principalmente justificar o

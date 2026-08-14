@@ -1,0 +1,234 @@
+================================================================================
+ PADROES DE PROJETO EXPLICADOS - para responder em entrevista
+================================================================================
+
+Formato deste arquivo: para cada padrao, respondo tres perguntas que um
+entrevistador costuma fazer -> O QUE E, ONDE ESTA NO CODIGO, e POR QUE FOI
+USADO (qual problema ele resolve aqui, especificamente).
+
+--------------------------------------------------------------------------------
+1. REPOSITORY (Repositorio)
+--------------------------------------------------------------------------------
+O QUE E: um padrao que esconde os detalhes de "como os dados sao salvos e
+buscados" atras de uma interface simples, com metodos que fazem sentido
+para o negocio (ex.: GetByDateAsync), em vez de expor SQL ou LINQ direto.
+
+ONDE ESTA: ILaunchRepository e IDailyBalanceRepository (interfaces, no
+Domain), implementadas por LaunchRepository e DailyBalanceRepository
+(camada Infrastructure, usando EF Core por baixo).
+
+POR QUE: a camada de Application so conhece a interface. Se um dia o banco
+mudar de Postgres para outro SGBD, ou se quisermos testar a logica de
+negocio sem banco nenhum (usando um repositorio falso/fake em memoria nos
+testes), a Application nao precisa mudar nada.
+
+--------------------------------------------------------------------------------
+2. UNIT OF WORK (Unidade de Trabalho)
+--------------------------------------------------------------------------------
+O QUE E: um padrao que agrupa varias operacoes de escrita em uma unica
+transacao logica, garantindo que tudo seja salvo junto ou nada seja salvo
+(atomicidade).
+
+ONDE ESTA: IUnitOfWork (Application) / UnitOfWork (Infrastructure), que por
+baixo dos panos chama DbContext.SaveChangesAsync().
+
+POR QUE: um handler pode alterar mais de uma entidade (ou registrar
+eventos de dominio) antes de persistir. O UnitOfWork centraliza o "confirma
+tudo agora" em um unico ponto, em vez de cada repositorio salvar sozinho
+(o que poderia deixar o banco em um estado inconsistente pela metade).
+
+--------------------------------------------------------------------------------
+3. CQRS (Command Query Responsibility Segregation)
+--------------------------------------------------------------------------------
+O QUE E: separar claramente as operacoes que MUDAM estado (Commands, como
+"registrar um lancamento") das operacoes que so LEEM estado (Queries, como
+"buscar lancamentos de uma data"), cada uma com seu proprio objeto e seu
+proprio handler.
+
+ONDE ESTA: pastas Commands/ e Queries/ dentro de cada modulo da Application
+(ex.: Launches/Commands/RegisterLaunch e Launches/Queries/GetLaunchesByDate).
+Cada Command/Query tem seu proprio Handler dedicado.
+
+POR QUE: evita "handlers gigantes" que fazem tudo, e deixa explicito, so
+pelo nome da classe, se uma operacao muda dados ou nao. Tambem abre a porta
+(nao usada aqui, mas e a motivacao classica do padrao) para escalar leitura
+e escrita de formas diferentes no futuro, se necessario.
+
+--------------------------------------------------------------------------------
+4. MEDIATOR (Mediador) - via biblioteca MediatR
+--------------------------------------------------------------------------------
+O QUE E: em vez do Controller chamar diretamente uma classe de servico
+especifica, ele manda uma "mensagem" (o Command ou Query) para um
+mediador central, que descobre sozinho qual Handler deve trata-la.
+
+ONDE ESTA: os controllers chamam _sender.Send(command) (ISender e a
+interface do MediatR). O MediatR, configurado em
+CashFlow.Application/DependencyInjection.cs, escaneia o assembly e
+registra automaticamente cada par Command/Handler.
+
+POR QUE: o Controller fica extremamente simples (so traduz HTTP <-> Command
+e devolve o resultado), sem precisar injetar uma lista crescente de
+servicos diferentes. Tambem e o que permite os "Behaviors" (validacao,
+logging) rodarem automaticamente antes/depois de QUALQUER comando, sem
+precisar repetir esse codigo em cada handler.
+
+--------------------------------------------------------------------------------
+5. PIPELINE BEHAVIOR (parte do padrao Decorator/Chain of Responsibility)
+--------------------------------------------------------------------------------
+O QUE E: uma forma de "envolver" a execucao de cada Command/Query com
+codigo transversal (que se aplica a todos), tipo camadas de uma cebola:
+antes de chegar no Handler real, a requisicao passa por uma cadeia de
+Behaviors.
+
+ONDE ESTA: ValidationBehavior e LoggingBehavior (Application/Common/
+Behaviors), registrados no pipeline do MediatR.
+
+POR QUE: ValidationBehavior roda o FluentValidation automaticamente ANTES
+de qualquer handler ser executado - se a validacao falhar, o handler nem e
+chamado. Isso evita ter que escrever "if (!ValidateInput()) return erro"
+em todo handler manualmente.
+
+--------------------------------------------------------------------------------
+6. AGGREGATE ROOT / ENTITY / VALUE OBJECT (padroes de Domain-Driven Design)
+--------------------------------------------------------------------------------
+O QUE E:
+  - Entity: um objeto com identidade propria (um Id), mesmo que seus outros
+    dados mudem ao longo do tempo (ex.: Launch, DailyBalance).
+  - Aggregate Root: uma Entity que e o "ponto de entrada" oficial para um
+    conjunto de dados relacionados, e a unica forma permitida de criar/
+    alterar esse conjunto de forma valida (garantindo as regras de
+    negocio). Launch e DailyBalance sao Aggregate Roots aqui.
+  - Value Object: um objeto SEM identidade propria, que e comparado pelo
+    seu valor (dois Money de R$ 10,00 sao "iguais", nao importa quem criou
+    cada um). Aqui: Money.
+
+ONDE ESTA: CashFlow.Domain/Common (AggregateRoot.cs, Entity.cs,
+ValueObject.cs) e as entidades/objetos concretos em
+CashFlow.Domain/Entities e CashFlow.Domain/ValueObjects.
+
+POR QUE: Launch nao tem um construtor publico comum - ele so pode ser
+criado atraves do metodo de fabrica Launch.Register(...), que valida tudo
+(descricao nao vazia, valor > 0, etc.) antes de permitir a existencia do
+objeto. Isso torna IMPOSSIVEL, em qualquer lugar do sistema, existir um
+Launch invalido - a regra de negocio esta protegida dentro da propria
+entidade, nao espalhada em validacoes soltas por ai.
+
+--------------------------------------------------------------------------------
+7. DOMAIN EVENTS (Eventos de Dominio)
+--------------------------------------------------------------------------------
+O QUE E: quando algo importante acontece dentro de uma entidade de
+dominio, ela "avisa" o resto do sistema atraves de um evento, sem precisar
+saber quem vai reagir a esse evento.
+
+ONDE ESTA: LaunchRegisteredEvent (implementa IDomainEvent), disparado
+dentro de Launch.Register(...).
+
+POR QUE: desacopla "o que aconteceu" (um lancamento foi registrado) de "o
+que fazer a respeito" (enfileirar a consolidacao). A entidade Launch nao
+precisa saber que existe uma fila de consolidacao - ela so anuncia o
+evento.
+
+--------------------------------------------------------------------------------
+8. FACTORY METHOD (Metodo de Fabrica)
+--------------------------------------------------------------------------------
+O QUE E: usar um metodo estatico nomeado (em vez do construtor "new") para
+criar um objeto, permitindo validar e escolher o processo de criacao com
+mais controle.
+
+ONDE ESTA: Launch.Register(...) e Money.Create(...) - os construtores
+dessas classes sao privados, forcando todo mundo a passar por esses
+metodos, que validam os invariantes antes de devolver a instancia.
+
+POR QUE: garante, por construcao, que um Launch ou um Money invalido nunca
+exista em memoria - a validacao acontece no unico portao de entrada
+possivel.
+
+--------------------------------------------------------------------------------
+9. PRODUCER/CONSUMER (Produtor/Consumidor) com fila em memoria
+--------------------------------------------------------------------------------
+O QUE E: um padrao de concorrencia onde um lado "produz" itens de trabalho
+e coloca em uma fila, e outro lado (independente, em outro momento) os
+"consome" e processa, sem os dois lados ficarem bloqueados um pelo outro.
+
+ONDE ESTA: InMemoryConsolidationQueue (baseada em
+System.Threading.Channels.Channel<DateOnly>, capacidade 200) e o
+ConsolidationWorker, que e o unico consumidor.
+
+POR QUE: e o mecanismo central que separa "registrar um lancamento" de
+"consolidar o saldo", que e o requisito nao funcional mais importante do
+desafio (ver 01-ANALISE-DE-ADERENCIA-AO-DESAFIO.txt). O produtor (o handler
+de registro) nunca espera o consumidor - ele so tenta empurrar um sinal, e
+segue seu caminho independentemente do resultado.
+
+--------------------------------------------------------------------------------
+10. CIRCUIT BREAKER + RETRY (padroes de resiliencia, via Polly)
+--------------------------------------------------------------------------------
+O QUE E:
+  - Retry: se uma operacao falhar por um motivo provavelmente temporario,
+    tenta de novo algumas vezes, esperando um pouco mais entre cada
+    tentativa (backoff exponencial + jitter, para nao sincronizar varias
+    tentativas ao mesmo tempo).
+  - Circuit Breaker: se as falhas continuarem se repetindo, "abre o
+    circuito" e para de tentar por um tempo (falha rapido/fail-fast), dando
+    espaço para o sistema dependente (ex.: o banco) se recuperar, em vez de
+    bombardea-lo com mais tentativas.
+
+ONDE ESTA: ConsolidationResiliencePipelineFactory (Infrastructure/
+Resilience), usado pelo ConsolidationWorker a cada tentativa de
+consolidacao. Configuracao: 3 tentativas de retry, circuito abre se 50%
+das ultimas chamadas (com no minimo 4 amostras em 30s) falharem, fica
+aberto por 15 segundos.
+
+POR QUE: e a camada extra de proteção sobre o Producer/Consumer - garante
+que falhas transitorias no processamento em background nao derrubem o
+worker nem gerem uma tempestade de tentativas contra um banco que já
+esta com problema.
+
+--------------------------------------------------------------------------------
+11. OPTIMISTIC CONCURRENCY (Concorrencia Otimista)
+--------------------------------------------------------------------------------
+O QUE E: uma forma de lidar com duas atualizacoes concorrentes na mesma
+linha do banco sem usar locks pesados: cada linha tem uma "versao"
+(RowVersion), e ao salvar, o banco so aceita a atualizacao se a versao
+ainda for a mesma que foi lida. Se outra transacao ja mudou a linha nesse
+meio tempo, a segunda atualizacao falha (DbUpdateConcurrencyException) em
+vez de sobrescrever silenciosamente o trabalho da primeira.
+
+ONDE ESTA: DailyBalance.RowVersion, mapeado como concurrency token em
+DailyBalanceConfiguration.cs (camada Infrastructure).
+
+POR QUE: e possivel que duas consolidacoes da MESMA data rodem quase ao
+mesmo tempo (ex.: um sinal da fila normal + o ReconciliationWorker
+encontrando a mesma data). O RowVersion evita que uma sobrescreva a outra
+de forma inconsistente.
+
+--------------------------------------------------------------------------------
+12. MIDDLEWARE / CHAIN OF RESPONSIBILITY (no pipeline HTTP do ASP.NET Core)
+--------------------------------------------------------------------------------
+O QUE E: cada requisicao HTTP passa por uma cadeia de componentes
+("pipeline"), cada um podendo processar, modificar ou interromper a
+requisicao antes de passar para o proximo.
+
+ONDE ESTA: GlobalExceptionMiddleware (Api/Middleware), registrado bem no
+inicio do pipeline em Program.cs, envolvendo toda a execucao dos
+controllers.
+
+POR QUE: e o unico lugar do sistema que sabe traduzir qualquer excecao
+(de validacao, de regra de negocio, ou um erro inesperado) para uma
+resposta HTTP padronizada (application/problem+json com o status code
+correto: 400, 404, 422 ou 500). Os controllers e handlers nunca precisam
+se preocupar com "como formatar um erro para o cliente".
+
+--------------------------------------------------------------------------------
+RESUMO RAPIDO (cole isso na cabeca antes da entrevista)
+--------------------------------------------------------------------------------
+
+Repository + Unit of Work  -> abstrair o banco de dados
+CQRS + Mediator             -> organizar os casos de uso (comandos e consultas)
+Pipeline Behavior            -> validacao e logging automaticos e centralizados
+Aggregate Root / Value Object / Factory Method -> proteger a regra de negocio
+Domain Events                -> desacoplar "o que aconteceu" de "quem reage"
+Producer/Consumer            -> desacoplar registro (rapido) de consolidacao (pesada)
+Retry + Circuit Breaker      -> tolerar falhas transitorias sem derrubar nada
+Optimistic Concurrency       -> evitar sobrescrita silenciosa em concorrencia
+Middleware                   -> tratamento de erro centralizado e consistente
