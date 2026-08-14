@@ -32,16 +32,18 @@ public sealed class LaunchConfiguration : IEntityTypeConfiguration<Launch>
                 .IsRequired();
         });
 
-        builder.Property(l => l.OccurredOn)
+        builder.Property(l => l.LaunchDate)
+            .HasColumnName("launch_date")
             .HasColumnType("date")
             .IsRequired();
 
         builder.Property(l => l.CreatedAtUtc)
+            .HasColumnName("created_at_utc")
             .IsRequired();
 
         builder.Ignore(l => l.DomainEvents);
 
-        builder.HasIndex(l => l.OccurredOn)
-            .HasDatabaseName("ix_launches_occurred_on");
+        builder.HasIndex(l => l.LaunchDate)
+            .HasDatabaseName("ix_launches_launch_date");
     }
 }

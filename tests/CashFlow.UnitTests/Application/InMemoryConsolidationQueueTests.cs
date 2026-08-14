@@ -54,13 +54,25 @@ public class InMemoryConsolidationQueueTests
         using var cts = new CancellationTokenSource();
         var received = new List<DateOnly>();
 
-        await foreach (var date in queue.ReadAllAsync(cts.Token))
+        // Cancelar o token durante a leitura é o mecanismo real usado para
+        // encerrar o worker no shutdown (ver ConsolidationWorker), e por
+        // contrato do IAsyncEnumerable isso propaga uma OperationCanceledException
+        // em vez de simplesmente finalizar o laço - por isso ela é esperada
+        // e tratada aqui, e não um efeito colateral indesejado.
+        try
         {
-            received.Add(date);
-            if (received.Count == 2)
+            await foreach (var date in queue.ReadAllAsync(cts.Token))
             {
-                cts.Cancel();
+                received.Add(date);
+                if (received.Count == 2)
+                {
+                    cts.Cancel();
+                }
             }
+        }
+        catch (OperationCanceledException)
+        {
+            // Esperado: é assim que sinalizamos o fim da leitura neste teste.
         }
 
         received.Should().Equal(day1, day2);

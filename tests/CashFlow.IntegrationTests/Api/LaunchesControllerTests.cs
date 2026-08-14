@@ -86,5 +86,5 @@ public class LaunchesControllerTests
     // suite never collides with dates used by the consolidation tests,
     // which register launches for "today" and "yesterday".
     private static DateOnly UniqueDate() =>
-        new(2000, 1, 1).AddDays(Random.Shared.Next(1, 7300));
+        new DateOnly(2000, 1, 1).AddDays(Random.Shared.Next(1, 7300));
 }

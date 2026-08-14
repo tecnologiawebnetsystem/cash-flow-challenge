@@ -107,11 +107,11 @@ public class DailyBalancesControllerTests
         var balances = await response.Content.ReadFromJsonAsync<List<DailyBalanceDto>>();
         balances.Should().NotBeNull();
         balances!.Should().HaveCount(2);
-        balances.Select(b => b.ReferenceDate).Should().BeInAscendingOrder();
+        balances!.Select(b => b.ReferenceDate).Should().BeInAscendingOrder();
     }
 
     // A wide, distinct historical range so this suite never collides with
     // dates used by LaunchesControllerTests sharing the same container.
     private static DateOnly UniqueDate() =>
-        new(2010, 1, 1).AddDays(Random.Shared.Next(1, 3650));
+        new DateOnly(2010, 1, 1).AddDays(Random.Shared.Next(1, 3650));
 }

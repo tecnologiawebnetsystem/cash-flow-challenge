@@ -1,6 +1,6 @@
-using CashFlow.Application.Common.Exceptions;
 using FluentValidation;
 using MediatR;
+using ValidationException = CashFlow.Application.Common.Exceptions.ValidationException;
 
 namespace CashFlow.Application.Common.Behaviors;
 
