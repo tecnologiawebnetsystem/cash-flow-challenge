@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json.Serialization;
 using CashFlow.Api.Middleware;
 using CashFlow.Application;
@@ -24,8 +25,19 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "Cash Flow API",
         Version = "v1",
-        Description = "Gestão de lançamentos financeiros e saldo diário consolidado.",
+        Description = "API de gestão de lançamentos financeiros (créditos e débitos) e do saldo diário " +
+            "consolidado de um pequeno comércio. Consulte o README do repositório para o racional completo " +
+            "de arquitetura, resiliência e estrutura de banco de dados.",
     });
+
+    // Inclui os comentários /// dos controllers (resumo, parâmetros e
+    // descrição de cada resposta HTTP) na UI do Swagger, em vez de expor
+    // apenas as assinaturas dos endpoints sem contexto de negócio.
+    var xmlFilePath = Path.Combine(AppContext.BaseDirectory, $"{Assembly.GetExecutingAssembly().GetName().Name}.xml");
+    if (File.Exists(xmlFilePath))
+    {
+        options.IncludeXmlComments(xmlFilePath);
+    }
 });
 
 var app = builder.Build();
