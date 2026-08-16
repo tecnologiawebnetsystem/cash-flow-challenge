@@ -1,38 +1,39 @@
 ================================================================================
- ARQUITETURA EXPLICADA (Clean Architecture) - para responder em entrevista
+ 03 - A ARQUITETURA EXPLICADA (Clean Architecture)
 ================================================================================
 
-PERGUNTA TIPICA DE ENTREVISTA: "Me explica a arquitetura do seu projeto."
-
-RESPOSTA CURTA (decore esta): "Usei Clean Architecture com 4 camadas
-fisicamente separadas em projetos .csproj diferentes: Domain, Application,
-Infrastructure e Api. A regra de ouro e que as dependencias so podem
-apontar para dentro (das camadas externas para as internas), nunca o
+Se alguem perguntar "me explica a arquitetura do seu projeto", esse e o
+resumo que eu daria: usei Clean Architecture, com quatro camadas separadas
+fisicamente em projetos .csproj diferentes - Domain, Application,
+Infrastructure e Api. A regra basica e que as dependencias so podem apontar
+para dentro (das camadas mais externas para as mais internas), nunca ao
 contrario. Isso mantem a regra de negocio isolada de detalhes tecnicos como
-banco de dados ou framework web."
+qual banco de dados ou qual framework web esta sendo usado.
 
 --------------------------------------------------------------------------------
-1. POR QUE "CLEAN ARCHITECTURE" E NAO SO "MVC" OU "N-CAMADAS TRADICIONAL"?
+1. POR QUE CLEAN ARCHITECTURE, E NAO SO "MVC" OU "N-CAMADAS" TRADICIONAL?
 --------------------------------------------------------------------------------
 
-Numa arquitetura em camadas tradicional (Apresentacao -> Negocio -> Dados),
-e comum a camada de negocio depender diretamente do Entity Framework, do
-ADO.NET, etc. Isso "contamina" a regra de negocio com detalhes de
-infraestrutura, e dificulta testar a regra de negocio sem um banco de dados
-de verdade.
+Numa arquitetura em camadas mais tradicional (Apresentacao -> Negocio ->
+Dados), e bem comum a camada de negocio acabar dependendo diretamente do
+Entity Framework, do ADO.NET, ou de qualquer outro detalhe de acesso a
+dados. Isso "contamina" a regra de negocio com preocupacoes de
+infraestrutura, e torna dificil testar essa regra sem precisar de um banco
+de dados de verdade rodando.
 
-Na Clean Architecture, a dependencia e invertida: a camada de negocio
-(Domain e Application) NAO SABE que Postgres, EF Core ou Polly existem. Ela
-so conhece INTERFACES (contratos). Quem implementa essas interfaces com
+Na Clean Architecture, essa dependencia e invertida: a camada de negocio
+(Domain e Application) nao sabe que Postgres, EF Core ou Polly existem. Ela
+so conhece interfaces - contratos. Quem implementa esses contratos com
 tecnologia concreta e a camada de Infrastructure, que fica "por fora" e e
-plugada via injecao de dependencia.
+conectada de volta via injecao de dependencia.
 
-Vantagem pratica: e possivel testar 100% da regra de negocio (Domain e
-Application) sem precisar de um banco de dados rodando - e exatamente isso
-que os testes de unidade deste projeto fazem.
+A vantagem pratica disso, que sinto na pele ao escrever os testes: e
+possivel testar 100% da regra de negocio (Domain e Application) sem
+precisar de nenhum banco de dados rodando. E exatamente isso que os testes
+de unidade deste projeto fazem.
 
 --------------------------------------------------------------------------------
-2. AS 4 CAMADAS, DE DENTRO PARA FORA
+2. AS QUATRO CAMADAS, DE DENTRO PARA FORA
 --------------------------------------------------------------------------------
 
     CashFlow.Domain          (o nucleo, zero dependencias de terceiros)
@@ -44,118 +45,127 @@ que os testes de unidade deste projeto fazem.
     CashFlow.Infrastructure  (depende de Application + Domain)
          ^
          |
-    CashFlow.Api             (depende de todas as outras, e a "porta de
-                              entrada" do sistema, roda o processo)
+    CashFlow.Api             (depende de todas as outras - e a "porta de
+                              entrada" do sistema, quem sobe o processo)
 
   DOMAIN (CashFlow.Domain)
   ------------------------
-  O que tem: as entidades de negocio (Launch, DailyBalance), os objetos de
-  valor (Money), os enums (LaunchType, ConsolidationStatus), os eventos de
-  dominio (LaunchRegisteredEvent), as excecoes de dominio, e as
-  INTERFACES dos repositorios (ILaunchRepository, IDailyBalanceRepository).
-  O que NAO tem: nenhuma referencia a EF Core, ASP.NET, Postgres, JSON, ou
-  qualquer biblioteca de infraestrutura. E "codigo C# puro".
-  Por que importa: e a camada mais protegida e mais estavel do sistema.
-  Se um dia trocarem Postgres por MongoDB, ou ASP.NET por outro framework,
-  o Domain nao muda uma linha.
+  O que tem: as entidades de negocio (Launch, DailyBalance), o objeto de
+  valor Money, os enums (LaunchType, ConsolidationStatus), os eventos de
+  dominio (LaunchRegisteredEvent), as excecoes de dominio, e as interfaces
+  dos repositorios (ILaunchRepository, IDailyBalanceRepository).
+  O que nao tem: nenhuma referencia a EF Core, ASP.NET, Postgres, JSON, ou
+  qualquer biblioteca de infraestrutura. E codigo C# "puro".
+  Por que isso importa: e a camada mais protegida e mais estavel do
+  sistema. Se um dia decidissem trocar o Postgres por outro banco, ou o
+  ASP.NET por outro framework web, o Domain nao mudaria uma linha.
 
   APPLICATION (CashFlow.Application)
   -----------------------------------
   O que tem: os casos de uso do sistema, organizados como Comandos
   (RegisterLaunchCommand, ConsolidateDailyBalanceCommand) e Queries
   (GetLaunchesByDateQuery, GetDailyBalanceQuery, GetDailyBalanceRangeQuery),
-  cada um com seu Handler (a logica de orquestracao do caso de uso), os
-  validadores (FluentValidation) e os "Behaviors" (ValidationBehavior,
-  LoggingBehavior) que rodam automaticamente antes/depois de cada
-  comando/query via MediatR.
-  Depende de: apenas Domain (para usar as entidades) e de interfaces
-  (IUnitOfWork, ILaunchRepository etc.) que sao definidas aqui ou no Domain,
-  mas implementadas depois na Infrastructure.
+  cada um com seu Handler - a logica que orquestra aquele caso de uso -,
+  os validadores (FluentValidation), e os "behaviors" (ValidationBehavior,
+  LoggingBehavior) que rodam automaticamente antes ou depois de cada
+  comando/query, atraves do MediatR.
+  Do que depende: apenas do Domain (para usar as entidades) e de
+  interfaces que sao implementadas mais tarde pela Infrastructure
+  (IUnitOfWork, ILaunchRepository, etc.).
 
   INFRASTRUCTURE (CashFlow.Infrastructure)
   -----------------------------------------
-  O que tem: a implementacao REAL de tudo que a Application e o Domain
-  pediram por interface: CashFlowDbContext (EF Core + Npgsql), as
+  O que tem: a implementacao real de tudo que a Application e o Domain
+  pediram por interface - o CashFlowDbContext (EF Core + Npgsql), as
   implementacoes de ILaunchRepository e IDailyBalanceRepository, o
-  UnitOfWork, a fila em memoria InMemoryConsolidationQueue, os
-  BackgroundServices (ConsolidationWorker, ReconciliationWorker), e o
+  UnitOfWork, a fila em memoria (InMemoryConsolidationQueue), os workers
+  em segundo plano (ConsolidationWorker, ReconciliationWorker) e o
   pipeline de resiliencia com Polly.
-  E aqui que "o mundo real" entra: banco de dados, filas, workers em
+  E aqui que "o mundo real" entra: banco de dados, fila, processos em
   background.
 
   API (CashFlow.Api)
   -------------------
   O que tem: os Controllers (LaunchesController, DailyBalancesController),
-  os Contracts de request HTTP, o middleware global de excecao, a
-  configuracao do Swagger, e o Program.cs (onde tudo e "plugado" junto via
-  injecao de dependencia - AddApplication(), AddInfrastructure()).
-  Papel dela: traduzir HTTP em chamadas ao MediatR (ISender.Send(command))
-  e traduzir o resultado de volta em uma resposta HTTP. Os controllers sao
-  deliberadamente "burros" - nenhuma regra de negocio mora aqui.
+  os contratos de request HTTP, o middleware global de tratamento de
+  erros, a configuracao do Swagger, e o Program.cs - onde tudo e ligado
+  junto, via injecao de dependencia (AddApplication(), AddInfrastructure()).
+  O papel dela: traduzir uma requisicao HTTP em uma chamada ao MediatR
+  (_sender.Send(command)) e traduzir o resultado de volta em uma resposta
+  HTTP. Os controllers sao deliberadamente "burros" - nenhuma regra de
+  negocio mora aqui, so orquestracao de entrada e saida.
 
 --------------------------------------------------------------------------------
-3. FLUXO COMPLETO DE UMA REQUISICAO (exemplo: registrar um lancamento)
+3. O CAMINHO COMPLETO DE UMA REQUISICAO (exemplo: registrar um lancamento)
 --------------------------------------------------------------------------------
 
-  1. HTTP POST /api/v1/launches chega no LaunchesController (camada Api).
+  1. A requisicao HTTP POST /api/v1/launches chega no LaunchesController
+     (camada Api).
   2. O controller monta um RegisterLaunchCommand e chama
-     _sender.Send(command) - isso e o MediatR entregando o comando para
-     quem sabe trata-lo.
-  3. Antes do handler em si, o ValidationBehavior (camada Application)
-     roda automaticamente e executa o RegisterLaunchCommandValidator
-     (FluentValidation). Se algo for invalido, lanca uma ValidationException
-     e o handler nem chega a ser executado.
-  4. RegisterLaunchCommandHandler (camada Application) roda: cria um
-     Launch (via metodo de fabrica na entidade, camada Domain, que valida
-     os invariantes de negocio), pede para o ILaunchRepository salvar, e
-     pede para o IUnitOfWork confirmar a transacao (SaveChangesAsync).
-  5. Depois de salvar com sucesso, o handler pede para o
-     IConsolidationQueue (interface) enfileirar um sinal de consolidacao
-     para aquela data. Quem implementa essa interface de verdade e a
-     InMemoryConsolidationQueue (camada Infrastructure).
-  6. O handler devolve um LaunchDto, que sobe de volta ate o controller,
-     que devolve HTTP 201 Created.
-  7. Em paralelo, e de forma completamente assincrona (fora dessa
-     requisicao), o ConsolidationWorker (camada Infrastructure, roda o
-     tempo todo em segundo plano) vai eventualmente consumir aquele sinal
-     da fila e disparar o ConsolidateDailyBalanceCommand para recalcular o
-     saldo daquele dia.
+     _sender.Send(command) - e o MediatR entregando esse comando para quem
+     sabe trata-lo.
+  3. Antes de chegar no handler propriamente dito, o ValidationBehavior
+     (camada Application) roda automaticamente e executa o
+     RegisterLaunchCommandValidator (FluentValidation). Se algo estiver
+     invalido, uma ValidationException e lancada ali mesmo, e o handler
+     nem chega a ser executado.
+  4. O RegisterLaunchCommandHandler (camada Application) entra em acao:
+     cria um Launch atraves do metodo de fabrica da entidade (camada
+     Domain, que valida as regras de negocio antes do objeto existir),
+     pede para o ILaunchRepository salvar, e pede para o IUnitOfWork
+     confirmar a transacao.
+  5. Depois de salvar com sucesso - e so depois -, o handler pede para o
+     IConsolidationQueue (uma interface) enfileirar um sinal de
+     consolidacao para aquela data. Quem implementa essa interface de
+     verdade e a InMemoryConsolidationQueue (camada Infrastructure).
+  6. O handler devolve os dados do lancamento criado, que sobem de volta
+     ate o controller, que devolve HTTP 201 Created ao cliente.
+  7. Em paralelo, de forma completamente assincrona e fora dessa
+     requisicao, o ConsolidationWorker (camada Infrastructure, que roda o
+     tempo todo em segundo plano) eventualmente consome aquele sinal da
+     fila e dispara o recalculo do saldo daquele dia.
 
-  Note como a seta de dependencia sempre aponta "para dentro": o
-  Controller conhece a Application (via MediatR), a Application conhece o
-  Domain, mas o Domain nao conhece nada de fora. A Infrastructure
-  implementa interfaces que a Application/Domain definiram, mas a
-  Application/Domain nunca referenciam a Infrastructure diretamente -
-  quem faz essa ligacao e o container de injecao de dependencia, configurado
-  em Program.cs / DependencyInjection.cs de cada camada.
+  O detalhe que vale reparar aqui e a direcao das setas de dependencia:
+  elas sempre apontam "para dentro". O Controller conhece a Application
+  (atraves do MediatR), a Application conhece o Domain, mas o Domain nao
+  conhece nada de fora. A Infrastructure implementa interfaces que a
+  Application e o Domain definiram, mas nunca e o contrario - a
+  Application e o Domain nunca referenciam a Infrastructure diretamente.
+  Quem faz essa ligacao final e o container de injecao de dependencia,
+  configurado em Program.cs e nos metodos de extensao de cada camada
+  (AddApplication(), AddInfrastructure()).
 
 --------------------------------------------------------------------------------
-4. PERGUNTAS QUE O ENTREVISTADOR PODE FAZER (e respostas prontas)
+4. PERGUNTAS QUE COSTUMAM APARECER, E COMO EU RESPONDERIA
 --------------------------------------------------------------------------------
 
-P: "Por que separar em projetos .csproj diferentes, e nao so pastas?"
-R: Porque assim a regra de dependencia e imposta pelo PROPRIO COMPILADOR.
-   Se alguem tentar, por engano, referenciar CashFlow.Infrastructure de
-   dentro de CashFlow.Domain, o projeto simplesmente nao compila. Com
-   pastas dentro de um unico projeto, nada impede esse erro alem de
-   disciplina de code review.
+P: "Por que separar em projetos .csproj diferentes, e nao so em pastas
+    dentro de um projeto so?"
+R: Porque assim a regra de dependencia e imposta pelo proprio compilador,
+   nao so por disciplina de code review. Se alguem tentar, por engano,
+   referenciar CashFlow.Infrastructure de dentro de CashFlow.Domain, o
+   projeto simplesmente nao compila. Com pastas dentro de um unico
+   projeto, nada impede esse erro alem de alguem perceber na revisao.
 
-P: "Isso nao e over-engineering para um desafio pequeno?"
-R: Para um CRUD trivial, talvez fosse. Mas o proprio desafio pede um
-   requisito nao funcional de resiliencia/desacoplamento entre registro e
-   consolidacao - isso naturalmente pede uma separacao clara entre "regra
-   de negocio" e "como processamos em segundo plano", que e exatamente o
-   que Clean Architecture formaliza.
+P: "Isso nao e over-engineering para um desafio desse tamanho?"
+R: Para um CRUD simples, talvez fosse mesmo. Mas o proprio desafio pede um
+   requisito nao funcional de resiliencia e desacoplamento entre o
+   registro e a consolidacao - e isso naturalmente pede uma separacao
+   clara entre "regra de negocio" e "como processamos em segundo plano",
+   que e exatamente o que a Clean Architecture formaliza. Nao usei essa
+   estrutura por capricho, usei porque o proprio requisito pedia.
 
-P: "Onde fica a regra 'saldo = creditos - debitos'?"
-R: No Domain, dentro de DailyBalance (o metodo/logica de consolidacao) e em
-   Launch.SignedAmount, que devolve o valor positivo para credito e
-   negativo para debito. E regra de negocio pura, sem tocar em banco.
+P: "Onde fica a regra 'saldo = creditos menos debitos'?"
+R: No Domain, dentro da logica de consolidacao de DailyBalance e em
+   Launch.SignedAmount, que devolve o valor positivo para um credito e
+   negativo para um debito. E regra de negocio pura, que nao toca em banco
+   de dados nem sabe que ele existe.
 
 P: "O que e injecao de dependencia aqui, na pratica?"
-R: Cada camada externa expoe um metodo de extensao (AddApplication(),
-   AddInfrastructure()) chamado em Program.cs, que registra no container
-   do ASP.NET Core qual implementacao concreta responde a cada interface
-   (ex.: "quando alguem pedir ILaunchRepository, entregue uma instancia de
-   LaunchRepository"). Isso e o que permite ao Domain/Application falarem
-   so em interfaces e nunca saberem qual e a implementacao real.
+R: Cada camada mais externa expoe um metodo de extensao (AddApplication(),
+   AddInfrastructure()), chamado no Program.cs, que registra no container
+   do ASP.NET Core qual implementacao concreta responde a cada interface -
+   por exemplo, "quando alguem pedir ILaunchRepository, entregue uma
+   instancia de LaunchRepository". E isso que permite ao Domain e a
+   Application falarem so em interfaces, sem nunca precisar saber qual e
+   a implementacao real por tras delas.

@@ -20,6 +20,12 @@ pergunta especifica que um entrevistador costuma fazer:
   06-TESTES-EXPLICADOS.txt                -> as duas suites de teste, o
                                               que cada uma cobre e como
                                               rodar.
+  07-QUALIDADE-SOLID-TESTABILIDADE-        -> mapeia os 4 criterios de
+  DESACOPLAMENTO.txt                          avaliacao do desafio (Clean
+                                              Code/SOLID, testabilidade,
+                                              desacoplamento, documentacao)
+                                              para evidencia concreta no
+                                              codigo.
 
 Este documento descreve os padroes de projeto, a arquitetura escolhida e o
 motivo de cada decisao tomada durante o desenvolvimento do desafio. A ideia
