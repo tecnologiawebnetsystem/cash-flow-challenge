@@ -17,6 +17,7 @@ API REST para controle de fluxo de caixa de um pequeno comércio, desenvolvida c
 - [Estratégia de resiliência](#estratégia-de-resiliência)
 - [Testes](#testes)
 - [Decisões de projeto](#decisões-de-projeto)
+- [Documentação complementar](#documentação-complementar)
 - [Melhorias futuras](#melhorias-futuras)
 
 ## Aderência ao desafio
@@ -36,9 +37,18 @@ Checklist objetivo comparando o que o desafio pediu com o que foi efetivamente i
 |---|---|---|
 | Linguagem C# | Atendido | .NET 8 / C# 12 |
 | Rotinas de teste | Atendido | Testes de unidade (xUnit) e de integração (xUnit + Testcontainers) |
-| Clean Code, SOLID e Design Patterns | Atendido | Ver [Padrões de projeto utilizados](#padrões-de-projeto-utilizados) e o documento [`ARQUITETURA-E-DECISOES-TECNICAS.txt`](./ARQUITETURA-E-DECISOES-TECNICAS.txt) |
+| Clean Code, SOLID e Design Patterns | Atendido | Ver [Padrões de projeto utilizados](#padrões-de-projeto-utilizados) e o documento [`07-QUALIDADE-SOLID-TESTABILIDADE-DESACOPLAMENTO.txt`](./07-QUALIDADE-SOLID-TESTABILIDADE-DESACOPLAMENTO.txt) |
 | README com pré-requisitos, passos para rodar e modo de funcionamento | Atendido | Este arquivo |
 | Código-fonte em repositório público no GitHub | Atendido | Repositório já publicado como público |
+
+**Critérios de qualidade avaliados (Clean Code/SOLID, testabilidade, desacoplamento, documentação)**
+
+| Critério | Status | Onde |
+|---|---|---|
+| Qualidade do código (Clean Code + SOLID) | Atendido | DIP em toda a base via interfaces + injeção de dependência; SRP separando validação/logging (behaviors do MediatR) e resiliência (Infrastructure) da regra de negócio pura. Detalhado em [`07-QUALIDADE-SOLID-TESTABILIDADE-DESACOPLAMENTO.txt`](./07-QUALIDADE-SOLID-TESTABILIDADE-DESACOPLAMENTO.txt) |
+| Testabilidade das regras de negócio | Atendido | 39 testes de unidade (Domain + Application, com mocks via Moq) + 8 testes de integração (Testcontainers). Detalhado em [`06-TESTES-EXPLICADOS.txt`](./06-TESTES-EXPLICADOS.txt) |
+| Desacoplamento entre camadas | Atendido | `CashFlow.Domain` não referencia nenhum outro projeto ou biblioteca de infraestrutura; a dependência entre `.csproj` só aponta para dentro (Api → Infrastructure/Application → Domain). Detalhado em [`03-ARQUITETURA-EXPLICADA.txt`](./03-ARQUITETURA-EXPLICADA.txt) |
+| Documentação transparente das escolhas técnicas | Atendido | Este README + 7 arquivos `.txt` explicativos na raiz do repositório, cada um focado em uma pergunta de entrevista |
 
 **Requisitos opcionais**
 
@@ -347,12 +357,27 @@ Essa combinação atende ao pico de carga documentado sem exigir infraestrutura 
 
 O projeto possui duas suítes de teste com responsabilidades distintas:
 
-- **`CashFlow.UnitTests`** (xUnit + FluentAssertions + NSubstitute): cobre regras de domínio (invariantes de `Launch` e `Money`), validadores do FluentValidation, handlers da Application (com dependências substituídas por dublês de teste) e o comportamento da fila de consolidação em memória (incluindo o cenário de saturação/descarte). Não depende de infraestrutura externa — roda em qualquer máquina apenas com o .NET SDK.
+- **`CashFlow.UnitTests`** (xUnit + FluentAssertions + Moq): cobre regras de domínio (invariantes de `Launch` e `Money`), validadores do FluentValidation, handlers da Application (com dependências substituídas por mocks) e o comportamento da fila de consolidação em memória (incluindo o cenário de saturação/descarte). Não depende de infraestrutura externa — roda em qualquer máquina apenas com o .NET SDK.
 - **`CashFlow.IntegrationTests`** (xUnit + WebApplicationFactory + Testcontainers): sobe a aplicação real via `WebApplicationFactory` contra um PostgreSQL real e descartável, provisionado automaticamente pelo Testcontainers (exige Docker em execução). Cobre o fluxo ponta a ponta dos endpoints (registro de lançamento, consulta por data, consolidação síncrona e por intervalo, idempotência da consolidação).
 
 ## Decisões de projeto
 
 Para uma explicação detalhada de cada padrão de projeto utilizado, das camadas da arquitetura e do racional por trás de cada decisão técnica (incluindo trade-offs considerados), consulte o documento [`ARQUITETURA-E-DECISOES-TECNICAS.txt`](./ARQUITETURA-E-DECISOES-TECNICAS.txt).
+
+## Documentação complementar
+
+Além deste README, o repositório traz uma série de arquivos `.txt` na raiz, escritos em português e no formato pergunta-e-resposta, pensados para consulta rápida (por exemplo, antes de uma entrevista técnica sobre este projeto):
+
+| Arquivo | Conteúdo |
+|---|---|
+| [`01-ANALISE-DE-ADERENCIA-AO-DESAFIO.txt`](./01-ANALISE-DE-ADERENCIA-AO-DESAFIO.txt) | Checklist requisito por requisito do PDF do desafio comparado ao que foi implementado |
+| [`02-COMO-TESTAR-A-API.txt`](./02-COMO-TESTAR-A-API.txt) | Passo a passo para subir o projeto e testar cada endpoint via Swagger ou `curl`, incluindo cenários de erro e como demonstrar a resiliência |
+| [`03-ARQUITETURA-EXPLICADA.txt`](./03-ARQUITETURA-EXPLICADA.txt) | As 4 camadas da Clean Architecture explicadas com o fluxo completo de uma requisição |
+| [`04-PADROES-DE-PROJETO-EXPLICADOS.txt`](./04-PADROES-DE-PROJETO-EXPLICADOS.txt) | Cada padrão de projeto usado: o que é, onde está no código, por que foi escolhido |
+| [`05-BANCO-DE-DADOS-EXPLICADO.txt`](./05-BANCO-DE-DADOS-EXPLICADO.txt) | Estrutura das tabelas, colunas, índices e migrations do EF Core |
+| [`06-TESTES-EXPLICADOS.txt`](./06-TESTES-EXPLICADOS.txt) | As duas suítes de teste, o que cada arquivo cobre e como executá-las |
+| [`07-QUALIDADE-SOLID-TESTABILIDADE-DESACOPLAMENTO.txt`](./07-QUALIDADE-SOLID-TESTABILIDADE-DESACOPLAMENTO.txt) | Mapeia os 4 critérios de avaliação do desafio (Clean Code/SOLID, testabilidade, desacoplamento, documentação) para evidência concreta no código |
+| [`ARQUITETURA-E-DECISOES-TECNICAS.txt`](./ARQUITETURA-E-DECISOES-TECNICAS.txt) | Documento de referência mais longo e narrativo, com o racional completo de cada decisão técnica e os trade-offs considerados |
 
 ## Melhorias futuras
 
