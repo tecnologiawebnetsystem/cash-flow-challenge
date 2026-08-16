@@ -3,10 +3,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CashFlow.Infrastructure.Persistence;
 
-/// <summary>
-/// Contexto de persistência do EF Core. Conhece apenas os agregados do domínio,
-/// nunca é referenciado diretamente pela camada de Application (apenas via interfaces).
-/// </summary>
 public sealed class CashFlowDbContext : DbContext
 {
     public CashFlowDbContext(DbContextOptions<CashFlowDbContext> options)

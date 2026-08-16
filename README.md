@@ -205,9 +205,9 @@ A ideia central por trás dessa escolha é simples de justificar: a regra de neg
 │   Entidades · Objetos de Valor · Eventos de Domínio ·           │
 │   Exceções de negócio · Contratos de repositório                │
 │             (não depende de nenhuma outra camada)               │
-└───────────────────────────▲───────────────────────────────────┘
+└───────────────────────────▲─────────────���─────────────────────┘
                             │ implementa as interfaces de
-┌───────────────────────────┴───────────────────────────────────┐
+┌───────────────────────────┴───��───────────────────────────────┐
 │                    CashFlow.Infrastructure                     │
 │   EF Core + PostgreSQL · Fila de consolidação em memória ·      │
 │   Workers em background · Políticas de resiliência (Polly)      │

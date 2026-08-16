@@ -6,13 +6,7 @@ using MediatR;
 
 namespace CashFlow.Application.Consolidation.Commands.ConsolidateDailyBalance;
 
-/// <summary>
-/// Este handler propositalmente NÃO captura/engole exceções: as políticas
-/// de retry e circuit breaker são aplicadas pelo chamador na Infrastructure
-/// (o worker em background), mantendo as preocupações de resiliência fora
-/// da lógica de negócio (SRP), garantindo ainda que o fluxo de registro de
-/// lançamentos nunca seja bloqueado por uma falha aqui.
-/// </summary>
+
 public sealed class ConsolidateDailyBalanceCommandHandler
     : IRequestHandler<ConsolidateDailyBalanceCommand, DailyBalanceDto>
 {

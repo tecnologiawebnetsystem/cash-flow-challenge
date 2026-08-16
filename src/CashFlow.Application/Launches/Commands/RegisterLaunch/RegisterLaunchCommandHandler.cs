@@ -7,14 +7,6 @@ using Microsoft.Extensions.Logging;
 
 namespace CashFlow.Application.Launches.Commands.RegisterLaunch;
 
-/// <summary>
-/// Trata o registro de um novo lançamento. Este é o caminho de escrita que
-/// precisa permanecer disponível e rápido mesmo quando o subsistema de
-/// consolidação está degradado ou indisponível: o lançamento é persistido
-/// primeiro (fonte da verdade), e só depois um sinal best-effort é enviado
-/// para consolidar a sua data. Um sinal descartado nunca perde dados
-/// financeiros - ver <see cref="IConsolidationQueue"/>.
-/// </summary>
 public sealed class RegisterLaunchCommandHandler : IRequestHandler<RegisterLaunchCommand, LaunchDto>
 {
     private readonly ILaunchRepository _launchRepository;

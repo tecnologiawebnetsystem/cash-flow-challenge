@@ -1,10 +1,5 @@
 namespace CashFlow.Domain.Common;
 
-/// <summary>
-/// Classe base para Objetos de Valor (Value Objects). Objetos de Valor são
-/// comparados pelos valores de seus componentes em vez de por identidade,
-/// são imutáveis e se autovalidam.
-/// </summary>
 public abstract class ValueObject
 {
     protected abstract IEnumerable<object?> GetEqualityComponents();
