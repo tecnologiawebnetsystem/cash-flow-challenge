@@ -1,15 +1,16 @@
 ================================================================================
- BANCO DE DADOS EXPLICADO - para responder em entrevista
+ 05 - COMO O BANCO DE DADOS FOI MODELADO
 ================================================================================
 
 Banco usado: PostgreSQL 16, acessado via Entity Framework Core + Npgsql,
-usando a abordagem "Code First": as tabelas nao foram desenhadas antes num
-diagrama e depois copiadas para o codigo - elas nascem a partir das
-entidades C# (Launch, DailyBalance) e das classes de configuracao do EF
-Core, e o EF Core gera as migrations (scripts de criacao/alteracao de
-tabela) automaticamente a partir disso.
+na abordagem "Code First". Isso quer dizer que as tabelas nao foram
+desenhadas antes num diagrama separado e depois copiadas para o codigo -
+elas nascem a partir das entidades em C# (Launch, DailyBalance) e das
+classes de configuracao do EF Core, e o proprio EF Core gera as migrations
+(os scripts de criacao/alteracao de tabela) automaticamente a partir disso.
 
-Arquivos-fonte da verdade sobre o schema:
+Arquivos que sao a fonte da verdade sobre o schema, se voce quiser conferir
+com seus proprios olhos:
   - src/CashFlow.Domain/Entities/Launch.cs
   - src/CashFlow.Domain/Entities/DailyBalance.cs
   - src/CashFlow.Infrastructure/Persistence/Configurations/LaunchConfiguration.cs
@@ -17,188 +18,228 @@ Arquivos-fonte da verdade sobre o schema:
   - src/CashFlow.Infrastructure/Migrations/*_InitialCreate.cs (o script gerado)
 
 --------------------------------------------------------------------------------
-1. DIAGRAMA (visao simples)
+1. UMA VISAO SIMPLES DO MODELO
 --------------------------------------------------------------------------------
 
-    +-----------------------------+
-    |          launches           |
-    +-----------------------------+
-    | id            (PK, uuid)    |
-    | description   (varchar 200) |
-    | amount         (numeric)    |
-    | type           (varchar)    |  "Credit" ou "Debit"
-    | launch_date    (date)       |  <---+
-    | created_at_utc (timestamp)  |      |
-    +-----------------------------+      |
-                                          | (relacao logica, NAO ha
-                                          |  foreign key fisica)
-                                          |
-    +-----------------------------+      |
-    |       daily_balances        |      |
-    +-----------------------------+      |
-    | reference_date (PK, date)  |  <----+  (agrupa por data)
-    | total_credits   (numeric)   |
-    | total_debits    (numeric)   |
-    | closing_balance (numeric)   |
-    | status          (varchar)   |  "Pending" / "Consolidated" / "Failed"
-    | consolidated_at_utc (ts?)   |
-    | failure_reason  (varchar?)  |
-    | row_version     (bytea)     |  token de concorrencia otimista
-    +-----------------------------+
+    +--------------------------------+
+    |            launches           |
+    +--------------------------------+
+    | Id              (PK, uuid)     |
+    | Description     (varchar 200)  |
+    | amount           (numeric)      |
+    | Type             (varchar)      |  "Credit" ou "Debit"
+    | launch_date      (date, indice) |  <---+
+    | created_at_utc   (timestamptz)  |      |
+    +--------------------------------+      |
+                                             | relacao logica, calculada
+                                             | pela consolidacao - NAO ha
+                                             | foreign key fisica aqui
+    +--------------------------------+      |
+    |        daily_balances         |      |
+    +--------------------------------+      |
+    | Id              (PK, uuid)     |      |
+    | ReferenceDate    (indice unico) | <----+  (agrupa por data)
+    | total_credits     (numeric)     |
+    | total_debits      (numeric)     |
+    | closing_balance   (numeric)     |
+    | Status            (varchar)     |  "Pending" / "Consolidated" / "Failed"
+    | ConsolidatedAtUtc  (timestamptz?)|
+    | FailedAttempts     (integer)    |
+    | FailureReason      (varchar?)   |
+    | RowVersion         (bytea)      |  token de concorrencia otimista
+    +--------------------------------+
 
-Por que NAO existe uma foreign key literal entre launches e daily_balances:
-daily_balances e uma tabela de PROJECAO/RESUMO (uma "materializacao" do
-somatorio dos lancamentos de um dia), nao uma entidade filha no sentido
-classico. A relacao entre elas e "por data" (reference_date = launch_date),
-calculada pelo processo de consolidacao, e nao uma chave estrangeira fixa.
-Isso e intencional: o saldo diario pode (e deve) ser recalculado do zero a
-qualquer momento a partir dos lancamentos daquele dia - ele nunca e a
-"fonte da verdade", so uma projecao derivada dela.
-
---------------------------------------------------------------------------------
-2. TABELA "launches" (detalhada)
---------------------------------------------------------------------------------
-
-  Coluna           | Tipo             | Regras
-  ------------------|------------------|----------------------------------
-  id                | uuid (PK)        | Gerado no codigo (Guid.NewGuid()),
-                    |                  | nao pelo banco.
-  description       | varchar(200)     | not null.
-  amount             | numeric(18,2)    | not null. Sempre > 0 (a entidade
-                    |                  | Money garante isso antes mesmo de
-                    |                  | chegar no banco).
-  type               | varchar          | not null. Guardado como texto
-                    |                  | ("Credit"/"Debit"), nao como
-                    |                  | numero, para o dado no banco ser
-                    |                  | legivel por humanos direto no
-                    |                  | psql, sem precisar traduzir enum.
-  launch_date        | date             | not null. Indexado (index em
-                    |                  | launch_date), porque toda consulta
-                    |                  | de negocio filtra por data.
-  created_at_utc      | timestamp       | not null. Preenchido em UTC no
-                    |                  | momento da criacao.
-
-  Por que "amount" e um numero simples na tabela, e nao uma tabela
-  separada para o Value Object Money? Porque o EF Core mapeia Money como
-  um "owned type" (tipo possuido) - ele existe como um objeto rico dentro
-  do C# (com sua propria validacao), mas e "achatado" (flattened) em uma
-  unica coluna decimal na tabela, sem criar uma tabela extra so para
-  guardar um numero. Isso e configurado em LaunchConfiguration.cs.
+Por que nao existe uma foreign key entre launches e daily_balances: a
+tabela daily_balances e uma projecao/resumo - uma "materializacao" da soma
+dos lancamentos de um dia -, e nao uma entidade filha no sentido classico.
+A relacao entre as duas e por data (ReferenceDate corresponde a
+launch_date), calculada pelo processo de consolidacao, e nao uma chave
+estrangeira fixa gravada no banco. Isso e proposital: o saldo diario pode
+(e deve) ser recalculado do zero a qualquer momento, a partir dos
+lancamentos daquele dia - ele nunca e a fonte da verdade, so uma projecao
+derivada dela.
 
 --------------------------------------------------------------------------------
-3. TABELA "daily_balances" (detalhada)
+2. TABELA "launches", COLUNA POR COLUNA
 --------------------------------------------------------------------------------
 
-  Coluna              | Tipo             | Regras
-  --------------------|------------------|----------------------------------
-  reference_date        | date (PK)       | Uma linha por data - a data EH
-                       |                  | a chave primaria (nao existe um
-                       |                  | id separado, porque so pode
-                       |                  | existir um saldo consolidado
-                       |                  | por dia).
-  total_credits         | numeric(18,2)    | Soma de todos os creditos do dia.
-  total_debits           | numeric(18,2)    | Soma de todos os debitos do dia.
-  closing_balance        | numeric(18,2)    | total_credits - total_debits.
-  status                 | varchar          | "Pending" | "Consolidated" |
-                       |                  | "Failed" (enum ConsolidationStatus).
-  consolidated_at_utc     | timestamp?      | Preenchido so quando status =
-                       |                  | Consolidated.
-  failure_reason          | varchar?        | Preenchido so quando status =
-                       |                  | Failed (guarda a mensagem do
-                       |                  | ultimo erro, para diagnostico).
-  row_version              | bytea (rowversion) | Token de concorrencia
-                       |                  | otimista - o EF Core incrementa
-                       |                  | isso a cada UPDATE e rejeita
-                       |                  | qualquer save baseado numa
-                       |                  | versao antiga.
+  Coluna          | Tipo            | O que vale saber sobre ela
+  ----------------|-----------------|--------------------------------------
+  Id               | uuid (PK)       | Gerado no proprio codigo C#
+                   |                 | (Guid.NewGuid()), nao pelo banco.
+  Description      | varchar(200)    | Obrigatoria.
+  amount            | numeric(18,2)   | Obrigatoria, sempre maior que zero -
+                   |                 | e o Value Object Money que garante
+                   |                 | isso antes mesmo do dado chegar no
+                   |                 | banco.
+  Type              | varchar(20)     | Obrigatoria. Guardado como texto
+                   |                 | ("Credit" ou "Debit"), nao como
+                   |                 | numero, para o dado ficar legivel
+                   |                 | por qualquer pessoa direto no psql,
+                   |                 | sem precisar traduzir um enum na
+                   |                 | cabeca.
+  launch_date       | date            | Obrigatoria. Tem um indice proprio
+                   |                 | (ix_launches_launch_date), porque
+                   |                 | praticamente toda consulta de
+                   |                 | negocio filtra por essa coluna
+                   |                 | (listar lancamentos de um dia,
+                   |                 | consolidar um dia).
+  created_at_utc     | timestamptz    | Obrigatoria. Preenchida em UTC no
+                   |                 | momento em que o registro e criado.
 
-  Por que a data e a chave primaria, e nao um Guid/int autoincrement? Porque
-  a regra de negocio e literalmente "um saldo consolidado por dia" - usar a
-  propria data como chave torna essa regra impossivel de violar no nivel do
-  banco (nao existe como ter duas linhas para o mesmo dia, o banco rejeitaria
-  na hora por violacao de chave primaria).
+  Um detalhe que acho vale explicar: por que "amount" e uma coluna decimal
+  simples na tabela, e nao uma tabela separada so para o Value Object
+  Money? Porque o EF Core mapeia Money como um "owned type" (tipo
+  possuido) - ele existe como um objeto rico dentro do C#, com sua propria
+  validacao interna, mas e "achatado" em uma unica coluna numerica na
+  tabela, sem precisar de uma tabela extra so para guardar um numero. Isso
+  esta configurado em LaunchConfiguration.cs.
 
 --------------------------------------------------------------------------------
-4. UPSERT (inserir OU atualizar) na consolidacao
+3. TABELA "daily_balances", COLUNA POR COLUNA
+--------------------------------------------------------------------------------
+
+  Coluna              | Tipo               | O que vale saber sobre ela
+  --------------------|--------------------|-------------------------------
+  Id                    | uuid (PK)          | Identificador tecnico da
+                       |                    | linha, gerado no codigo.
+  ReferenceDate          | date               | A data a que o saldo se
+                       |                    | refere. Tem um indice unico
+                       |                    | (ux_daily_balances_reference_
+                       |                    | date) - e o proprio banco que
+                       |                    | garante que nunca existira
+                       |                    | mais de uma linha para a
+                       |                    | mesma data, mesmo se dois
+                       |                    | processos tentarem consolidar
+                       |                    | a mesma data ao mesmo tempo.
+  total_credits          | numeric(18,2)      | Soma de todos os creditos
+                       |                    | daquele dia.
+  total_debits            | numeric(18,2)      | Soma de todos os debitos
+                       |                    | daquele dia.
+  closing_balance         | numeric(18,2)      | total_credits menos
+                       |                    | total_debits. Pode ser
+                       |                    | negativo.
+  Status                  | varchar(20)        | "Pending", "Consolidated"
+                       |                    | ou "Failed" - o ciclo de
+                       |                    | vida da consolidacao daquela
+                       |                    | data.
+  ConsolidatedAtUtc        | timestamptz?       | Preenchida so quando o
+                       |                    | Status vira Consolidated.
+  FailedAttempts           | integer            | Conta quantas tentativas
+                       |                    | de consolidacao falharam
+                       |                    | consecutivamente para essa
+                       |                    | data.
+  FailureReason            | varchar(1000)?     | Preenchida so quando o
+                       |                    | Status vira Failed - guarda
+                       |                    | a mensagem do ultimo erro,
+                       |                    | para eu conseguir diagnosticar
+                       |                    | o problema sem precisar ir
+                       |                    | direto nos logs.
+  RowVersion               | bytea              | Token de concorrencia
+                       |                    | otimista - o EF Core
+                       |                    | incrementa isso a cada
+                       |                    | atualizacao e rejeita
+                       |                    | qualquer save que esteja
+                       |                    | baseado numa versao antiga
+                       |                    | da linha.
+
+  Por que essa tabela tem um Id (uuid) proprio, em vez de usar a data como
+  chave primaria direto? Foi uma escolha deliberada: usar um identificador
+  tecnico como chave primaria e o padrao que sigo em toda a base (inclusive
+  em launches), e a garantia de negocio de "uma linha por data" ainda fica
+  100% protegida - so que atraves de um indice unico na coluna
+  ReferenceDate, em vez de fazer a data carregar a responsabilidade de ser
+  a chave primaria da tabela. Na pratica, o resultado e o mesmo: o banco
+  rejeita, na hora, qualquer tentativa de criar uma segunda linha para o
+  mesmo dia.
+
+--------------------------------------------------------------------------------
+4. UPSERT (inserir OU atualizar) NA CONSOLIDACAO
 --------------------------------------------------------------------------------
 
 Toda vez que a consolidacao roda para uma data, ela faz um "upsert": se
-ainda nao existe uma linha para aquela reference_date, insere; se ja
-existe, atualiza os totais e o status. Isso e o que torna a consolidacao
-IDEMPOTENTE - rodar a mesma data 10 vezes seguidas sempre resulta na mesma
-linha final, nunca em 10 linhas duplicadas ou em totais somados errado.
+ainda nao existe uma linha para aquele ReferenceDate, insere uma nova; se
+ja existe, atualiza os totais e o status da que ja existia. E isso que
+torna a consolidacao idempotente - rodar a mesma data dez vezes seguidas
+sempre resulta na mesma linha final, nunca em dez linhas duplicadas ou em
+totais somados errado por engano.
 
-Onde: IDailyBalanceRepository.UpsertAsync (Domain, interface) /
-DailyBalanceRepository (Infrastructure, implementacao).
+Onde isso esta: a interface IDailyBalanceRepository.UpsertAsync (no
+Domain) e a implementacao DailyBalanceRepository (na Infrastructure).
 
 --------------------------------------------------------------------------------
 5. INDICES
 --------------------------------------------------------------------------------
 
-  - launches.launch_date            -> toda consulta de negocio (listar
-                                        lancamentos de um dia, consolidar um
-                                        dia) filtra por essa coluna.
-  - daily_balances (PK reference_date) -> a propria chave primaria já
-                                        serve como indice para consultas de
-                                        um unico dia; consultas por
-                                        intervalo (startDate/endDate) usam
-                                        um range scan sobre esse mesmo
-                                        indice.
+  - launches.launch_date (ix_launches_launch_date): toda consulta de
+    negocio que existe hoje (listar lancamentos de um dia, consolidar um
+    dia) filtra por essa coluna, entao vale ter um indice dedicado a ela.
+  - daily_balances.ReferenceDate (ux_daily_balances_reference_date):
+    indice unico, que resolve duas coisas ao mesmo tempo - garante a regra
+    de negocio de "uma linha por data" e acelera as consultas por data ou
+    por intervalo de datas (startDate/endDate).
 
 --------------------------------------------------------------------------------
 6. MIGRATIONS (como o schema chega no banco)
 --------------------------------------------------------------------------------
 
-O schema nao e criado manualmente com um script SQL solto: ele vem de
-"Migrations" do EF Core, que sao classes C# geradas automaticamente (em
-src/CashFlow.Infrastructure/Migrations/), cada uma descrevendo uma
-alteracao incremental do banco (criar tabela X, adicionar coluna Y, etc.).
+O schema nao e criado manualmente com um script SQL solto: ele vem das
+"migrations" do EF Core, que sao classes C# geradas automaticamente (na
+pasta src/CashFlow.Infrastructure/Migrations/), cada uma descrevendo uma
+alteracao incremental do banco (criar uma tabela, adicionar uma coluna,
+etc.).
 
-Como elas sao aplicadas: em Program.cs, ao iniciar a API, e chamado
-dbContext.Database.MigrateAsync(), que aplica automaticamente qualquer
-migration pendente. Isso significa que, ao rodar "docker compose up", o
-banco e criado e populado com o schema correto sem nenhum passo manual.
+Como elas sao aplicadas na pratica: no Program.cs, ao iniciar a API, e
+chamado dbContext.Database.MigrateAsync(), que aplica automaticamente
+qualquer migration ainda pendente. Isso significa que, ao rodar
+"docker compose up", o banco ja sobe criado e populado com o schema
+correto, sem nenhum passo manual da minha parte ou de quem for rodar o
+projeto.
 
-Para gerar uma nova migration (se voce alterar uma entidade), o comando
-seria:
+Se um dia eu precisasse alterar uma entidade e gerar uma nova migration, o
+comando seria:
 
     dotnet ef migrations add NomeDaMudanca \
       --project src/CashFlow.Infrastructure \
       --startup-project src/CashFlow.Api
 
-(existe CashFlowDbContextFactory.cs justamente para permitir esse comando
-funcionar fora do processo normal da Api, "em tempo de design").
+(existe um arquivo CashFlowDbContextFactory.cs justamente para permitir
+que esse comando funcione "em tempo de design", fora do processo normal
+da API rodando.)
 
 --------------------------------------------------------------------------------
-7. PERGUNTAS DE ENTREVISTA SOBRE O BANCO
+7. PERGUNTAS QUE COSTUMAM APARECER SOBRE O BANCO
 --------------------------------------------------------------------------------
 
-P: "Por que Postgres e nao SQL Server / MySQL / Mongo?"
-R: PostgreSQL e open-source, roda facil em container (Docker), tem otimo
-   suporte no EF Core via Npgsql, e o modelo de dados aqui e claramente
-   relacional (lancamentos e saldos agregados por data) - nao ha
-   necessidade de um banco de documentos (Mongo) ou de features
-   proprietarias de um SQL Server.
+P: "Por que Postgres, e nao SQL Server, MySQL ou um banco de documentos
+    como o MongoDB?"
+R: O PostgreSQL e open-source, roda muito facil em container (o que ajuda
+   bastante num desafio que precisa ser reproduzivel via Docker), tem um
+   suporte solido no Entity Framework Core atraves do Npgsql, e o modelo
+   de dados aqui e claramente relacional - lancamentos e saldos agregados
+   por data. Nao havia motivo para um banco de documentos, e nenhuma
+   necessidade especifica de recursos proprietarios de um SQL Server.
 
-P: "Por que nao ha uma foreign key entre as duas tabelas?"
+P: "Por que nao existe uma foreign key entre as duas tabelas?"
 R: Porque daily_balances nao e uma entidade "filha" de launches no sentido
-   tradicional - e uma projecao/resumo, recalculada a partir dos
-   lancamentos daquela data sempre que a consolidacao roda. A ligacao e
-   pela data em si, nao por uma chave estrangeira fisica.
+   tradicional - e uma projecao, recalculada a partir dos lancamentos
+   daquela data toda vez que a consolidacao roda. A ligacao entre elas e
+   pela data em si, nao por uma chave estrangeira fisica gravada no banco.
 
 P: "O que acontece se dois processos tentarem consolidar a mesma data ao
     mesmo tempo?"
 R: O RowVersion (concorrencia otimista) garante que so um dos dois
-   consiga salvar por vez; o outro recebe uma exception de concorrencia,
-   que e absorvida pelo pipeline de retry do Polly - a proxima tentativa
-   le a versao mais recente e tenta de novo.
+   consegue salvar por vez; o outro recebe um erro de concorrencia, que e
+   absorvido pelo pipeline de retry do Polly - a proxima tentativa le a
+   versao mais recente da linha e tenta de novo, com dados atualizados.
 
 P: "Como voce garante que o valor de um lancamento nunca fica negativo ou
     zero no banco?"
-R: Isso e garantido ANTES de chegar no banco: o Value Object Money so pode
-   ser criado atraves de Money.Create(...), que lanca uma exception se o
-   valor for <= 0. E impossivel, no codigo, montar um Launch com um valor
-   invalido para depois tentar salvar - a validacao acontece na camada de
-   dominio, nao so numa constraint de banco (embora nada impeca de
-   adicionar tambem um CHECK constraint no banco como camada extra de
-   protecao, se quisesse reforcar ainda mais).
+R: Isso e garantido antes mesmo de chegar no banco: o Value Object Money
+   so pode ser criado atraves de Money.Create(...), que lanca um erro se o
+   valor for menor ou igual a zero. E impossivel, dentro do codigo, montar
+   um Launch com um valor invalido para depois tentar salvar - a validacao
+   acontece na camada de dominio, e nao so numa constraint de banco (ainda
+   que nada impedisse de adicionar tambem um CHECK constraint no banco
+   como uma camada extra de proteção, se eu quisesse reforcar ainda mais
+   essa garantia).

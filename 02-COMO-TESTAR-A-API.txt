@@ -1,68 +1,76 @@
 ================================================================================
- COMO TESTAR A API (passo a passo, com exemplos reais de requisicao)
+ 02 - COMO TESTAR A API (passo a passo, com exemplos reais)
 ================================================================================
 
 Este arquivo e um roteiro pratico: como subir o projeto e testar cada
-endpoint, seja pelo Swagger (mais facil, visual) ou por linha de comando
-(curl), incluindo os casos de erro esperados.
+endpoint na mao, seja pelo Swagger (mais facil, visual, direto no navegador)
+ou por linha de comando com curl. Inclui tambem os casos de erro esperados
+e um roteiro para demonstrar, na pratica, que o registro de lancamentos
+continua funcionando mesmo quando a consolidacao tem problema.
 
 --------------------------------------------------------------------------------
 1. SUBINDO O PROJETO
 --------------------------------------------------------------------------------
 
-OPCAO A - Docker Compose (recomendado, sobe API + Postgres com 1 comando)
+OPCAO A - Docker Compose (a mais simples, recomendo essa)
 
     docker compose up --build
 
-    O que acontece:
-    - Sobe um container Postgres 16 (usuario/senha/banco: cashflow) na
-      porta 5432, com healthcheck (pg_isready) antes de liberar a API.
-    - Builda a imagem da API (Dockerfile multi-stage: SDK para compilar,
-      runtime aspnet:8.0 para executar) e sobe na porta 8080.
-    - A API aplica as migrations do EF Core automaticamente ao iniciar
-      (nao precisa rodar nenhum comando de migration manualmente).
+    O que esse comando faz, por baixo dos panos:
+    - Sobe um container do Postgres 16 (usuario/senha/banco: cashflow) na
+      porta 5432, com um healthcheck (pg_isready) que so libera a API depois
+      que o banco estiver de fato pronto para receber conexoes.
+    - Builda a imagem da API (o Dockerfile usa multi-stage: uma imagem com
+      o SDK completo so para compilar, e uma imagem de runtime bem mais
+      leve para executar) e sobe na porta 8080.
+    - A API aplica as migrations do Entity Framework Core automaticamente
+      ao iniciar - voce nao precisa rodar nenhum comando de migration a
+      parte, o banco ja fica pronto para uso.
 
-    Depois de subir, a API estara em: http://localhost:8080
+    Depois de subir, a API fica disponivel em: http://localhost:8080
 
-OPCAO B - Rodando localmente sem Docker (precisa de um Postgres acessivel)
+OPCAO B - Rodando localmente, sem Docker para a API (precisa de um Postgres
+acessivel de algum jeito - pode ser o mesmo do compose, so o banco)
 
-    1. Suba um Postgres (pode ser o mesmo docker-compose so do banco:
-       "docker compose up postgres", ou uma instancia local sua).
-    2. Ajuste a connection string em
-       src/CashFlow.Api/appsettings.Development.json (chave
-       ConnectionStrings:CashFlowDatabase) se necessario.
+    1. Suba so o banco: docker compose up postgres
+       (ou aponte para uma instancia de Postgres sua, se preferir)
+    2. Se precisar, ajuste a connection string em
+       src/CashFlow.Api/appsettings.json (chave
+       ConnectionStrings:CashFlowDatabase) - por padrao ela ja aponta para
+       localhost:5432, que e onde o compose expoe o banco.
     3. Execute:
 
-       dotnet run --project src/CashFlow.Api/CashFlow.Api.csproj
+       dotnet run --project src/CashFlow.Api
 
-    Por padrao o Kestrel local costuma escutar em algo como
-    https://localhost:7xxx e http://localhost:5xxx (as portas exatas
-    aparecem no console ao iniciar, e ficam definidas em
-    src/CashFlow.Api/Properties/launchSettings.json).
+    Por padrao (ver src/CashFlow.Api/Properties/launchSettings.json), a
+    aplicacao sobe em http://localhost:5080, com
+    ASPNETCORE_ENVIRONMENT=Development ja configurado.
 
 --------------------------------------------------------------------------------
-2. TESTANDO PELO SWAGGER (jeito mais facil para demonstrar em entrevista)
+2. TESTANDO PELO SWAGGER (o jeito mais facil, recomendo comecar por aqui)
 --------------------------------------------------------------------------------
 
-O Swagger UI SO fica disponivel quando ASPNETCORE_ENVIRONMENT=Development
-(isso e propositalmente desligado em produção por seguranca - nao queremos
-documentacao interativa exposta publicamente).
+O Swagger UI so fica disponivel quando ASPNETCORE_ENVIRONMENT=Development
+(isso e desligado de proposito em producao, por seguranca - nao e desejavel
+deixar uma pagina que permite disparar chamadas contra a API exposta
+publicamente).
 
     - Via Docker Compose: http://localhost:8080/swagger
-      (o docker-compose.yml ja define ASPNETCORE_ENVIRONMENT=Development)
-    - Via dotnet run local: https://localhost:<porta>/swagger
+    - Via dotnet run local: http://localhost:5080/swagger
 
-O que voce vai ver:
-    - Os dois controllers (Launches e DailyBalances) com cada endpoint,
-      metodo HTTP, parametros esperados e os codigos de resposta possiveis
-      (200, 201, 400, 404) com a descricao de cada um - isso vem
-      diretamente dos comentarios /// escritos em cima de cada acao do
-      controller (LaunchesController.cs e DailyBalancesController.cs),
-      que agora sao exportados para o Swagger via
-      GenerateDocumentationFile + IncludeXmlComments (configurado em
-      CashFlow.Api.csproj e Program.cs).
+O que voce vai encontrar la:
+    - Os dois grupos de endpoints (Lancamentos e Saldos Diarios), cada um
+      com o metodo HTTP, os parametros esperados e os codigos de resposta
+      possiveis (200, 201, 400, 404) com uma descricao de cada um. Essa
+      descricao nao foi escrita "a mao" direto no Swagger - ela vem dos
+      proprios comentarios /// que estao em cima de cada metodo do
+      controller (em LaunchesController.cs e DailyBalancesController.cs),
+      exportados automaticamente para a UI. Ou seja: a documentacao nunca
+      fica desatualizada em relacao ao codigo, porque ela literalmente
+      nasce do codigo.
     - O botao "Try it out" permite montar o corpo da requisicao e executar
-      direto do navegador, sem precisar de Postman.
+      a chamada direto do navegador, sem precisar de Postman, Insomnia ou
+      qualquer outra ferramenta externa.
 
 --------------------------------------------------------------------------------
 3. ENDPOINT: REGISTRAR UM LANCAMENTO
@@ -71,7 +79,7 @@ O que voce vai ver:
     POST /api/v1/launches
     Content-Type: application/json
 
-    Corpo esperado (RegisterLaunchRequest):
+    Corpo esperado:
     {
       "description": "Venda de produto X",
       "amount": 150.75,
@@ -79,14 +87,16 @@ O que voce vai ver:
       "launchDate": "2026-08-14"
     }
 
-    Campos:
-    - description : string, obrigatoria, no maximo 200 caracteres.
-    - amount       : decimal, obrigatorio, deve ser MAIOR que zero.
-    - type         : "Credit" (entrada) ou "Debit" (saida). O enum e
-                     serializado como texto (nao como numero) para ficar
-                     legivel no Swagger e para o consumidor da API.
-    - launchDate   : opcional (formato AAAA-MM-DD). Se omitido, assume a
-                     data atual (UTC). Nao pode ser uma data no futuro.
+    O que cada campo significa:
+    - description : texto, obrigatorio, no maximo 200 caracteres.
+    - amount       : valor decimal, obrigatorio, precisa ser maior que zero.
+    - type         : "Credit" (entrada) ou "Debit" (saida). Optei por
+                     gravar e trafegar isso como texto, nao como numero,
+                     para o dado ficar legivel por si so, tanto no Swagger
+                     quanto para quem estiver consumindo a API.
+    - launchDate   : opcional, no formato AAAA-MM-DD. Se voce nao enviar,
+                     assume a data atual (UTC). Nao pode ser uma data no
+                     futuro.
 
     Exemplo via curl (Docker Compose, porta 8080):
 
@@ -94,8 +104,7 @@ O que voce vai ver:
           -H "Content-Type: application/json" \
           -d '{"description":"Venda balcao","amount":150.75,"type":"Credit","launchDate":"2026-08-14"}'
 
-    Resposta esperada: 201 Created, com o header Location apontando para
-    GET /api/v1/launches?date=2026-08-14, e corpo (LaunchDto):
+    Resposta esperada: 201 Created, com o corpo assim:
 
     {
       "id": "b3f1c2...-...",
@@ -106,13 +115,15 @@ O que voce vai ver:
       "createdAtUtc": "2026-08-14T19:00:00Z"
     }
 
-    Testando um erro de validacao (400 Bad Request):
+    Para ver o erro de validacao funcionando (400 Bad Request), tente
+    enviar um valor invalido de proposito:
 
         curl -i -X POST http://localhost:8080/api/v1/launches \
           -H "Content-Type: application/json" \
           -d '{"description":"","amount":-10,"type":"Credit"}'
 
-    Resposta esperada (application/problem+json):
+    A resposta vem no formato padrao de erro (application/problem+json),
+    com uma mensagem clara para cada campo que falhou:
 
     {
       "type": "https://httpstatuses.io/400",
@@ -133,8 +144,10 @@ O que voce vai ver:
 
     curl "http://localhost:8080/api/v1/launches?date=2026-08-14"
 
-    Resposta esperada: 200 OK com um array de LaunchDto (pode ser um array
-    vazio [] se nao houver lancamentos naquela data - isso NAO e erro 404).
+    Resposta esperada: 200 OK com uma lista de lancamentos. Se nao houver
+    nenhum lancamento naquela data, a resposta e uma lista vazia ([]), e
+    nao um erro 404 - afinal, "nao ter lancamento" e um resultado valido
+    para essa consulta, nao uma falha.
 
 --------------------------------------------------------------------------------
 5. ENDPOINT: CONSULTAR O SALDO CONSOLIDADO DE UM DIA
@@ -156,18 +169,18 @@ O que voce vai ver:
       "failureReason": null
     }
 
-    IMPORTANTE: a consolidacao acontece em background, de forma
-    assincrona, disparada automaticamente logo apos o POST de um
-    lancamento. Ou seja, se voce chamar esse GET meio segundo depois do
-    POST, e possivel (ainda que raro, o worker e rapido) que o saldo ainda
-    nao exista. Se isso acontecer, a resposta e 404 Not Found. Para uma
-    demonstracao 100% deterministica (sem depender de timing), use o
-    endpoint de consolidacao manual da secao 6 antes de consultar.
+    Um detalhe importante para nao se assustar ao testar: a consolidacao
+    acontece em segundo plano, de forma assincrona, disparada
+    automaticamente logo depois do POST de um lancamento. Ou seja, se voce
+    chamar esse GET meio segundo depois do POST, e possivel (ainda que raro
+    - o worker e rapido) que o saldo ainda nao exista. Se isso acontecer, a
+    resposta e 404 Not Found. Para um teste totalmente previsivel, sem
+    depender de tempo, use o endpoint de consolidacao manual da secao 6
+    logo antes de consultar.
 
-    Isso e exatamente o que os testes de integracao fazem (veja
-    DailyBalancesControllerTests.cs): eles chamam o endpoint de
-    consolidacao manual explicitamente, em vez de esperar o worker em
-    background, para o teste nao ficar dependente de tempo.
+    E exatamente assim que os testes de integracao fazem isso: eles chamam
+    o endpoint de consolidacao manual explicitamente, em vez de esperar o
+    worker em segundo plano, para o teste nunca ficar dependente de timing.
 
 --------------------------------------------------------------------------------
 6. ENDPOINT: FORCAR A (RE)CONSOLIDACAO DE UMA DATA (MANUAL)
@@ -177,14 +190,15 @@ O que voce vai ver:
 
     curl -i -X POST "http://localhost:8080/api/v1/daily-balances/2026-08-14/consolidate"
 
-    Resposta esperada: 200 OK, com o DailyBalanceDto recem-calculado (mesmo
-    formato do endpoint anterior). Esse endpoint e sincrono - ele calcula e
-    ja devolve o resultado na mesma resposta, util para demonstracoes e
-    para "forcar" a consolidacao sem esperar o worker.
+    Resposta esperada: 200 OK, ja com o saldo recem-calculado no corpo da
+    resposta (mesmo formato do endpoint anterior). Diferente da
+    consolidacao automatica, esse endpoint e sincrono - ele calcula e ja
+    devolve o resultado na mesma chamada, o que e util para demonstracoes
+    e para recuperar manualmente uma data especifica sem precisar esperar.
 
-    Rodar esse endpoint duas vezes seguidas para a mesma data e seguro
-    (idempotente): o resultado final e sempre o mesmo, nunca duplica
-    creditos/debitos.
+    Chamar esse endpoint duas vezes seguidas para a mesma data e seguro: o
+    resultado final e sempre o mesmo, porque a consolidacao recalcula tudo
+    do zero a cada vez (e por isso que ela e chamada de idempotente).
 
 --------------------------------------------------------------------------------
 7. ENDPOINT: RELATORIO DE SALDO DIARIO EM UM INTERVALO DE DATAS
@@ -194,15 +208,16 @@ O que voce vai ver:
 
     curl "http://localhost:8080/api/v1/daily-balances?startDate=2026-08-01&endDate=2026-08-14"
 
-    Resposta esperada: 200 OK com um array de DailyBalanceDto, um por dia
-    que ja tiver algum saldo (Consolidated ou Failed) dentro do intervalo.
+    Resposta esperada: 200 OK com uma lista de saldos diarios, um para cada
+    dia que ja tiver algum saldo (Consolidated ou Failed) dentro do
+    intervalo pedido.
 
-    Regras de validacao deste endpoint (GetDailyBalanceRangeQueryValidator):
-    - endDate deve ser maior ou igual a startDate.
-    - o intervalo entre startDate e endDate nao pode ser maior que 366
-      dias (protege contra consultas absurdamente largas).
+    Duas regras de validacao valem para esse endpoint:
+    - endDate precisa ser maior ou igual a startDate.
+    - o intervalo entre as duas datas nao pode passar de 366 dias (para
+      evitar uma consulta absurdamente ampla).
 
-    Testando a validacao (400 Bad Request):
+    Para ver a validacao rejeitando um intervalo invertido:
 
         curl -i "http://localhost:8080/api/v1/daily-balances?startDate=2026-08-14&endDate=2026-08-01"
 
@@ -214,53 +229,54 @@ O que voce vai ver:
 
     curl -i http://localhost:8080/health
 
-    Resposta esperada: 200 OK, corpo "Healthy". Util para o Docker/K8s
-    saberem se a aplicacao esta de pe (nao verifica o banco em detalhe,
-    apenas se o processo da API esta respondendo).
+    Resposta esperada: 200 OK, corpo "Healthy". E util principalmente para
+    orquestradores (Docker, Kubernetes) saberem se o processo da aplicacao
+    esta de pe e respondendo.
 
 --------------------------------------------------------------------------------
-9. DEMONSTRANDO A RESILIENCIA NA PRATICA (o "pulo do gato" da entrevista)
+9. COMO DEMONSTRAR A RESILIENCIA NA PRATICA
 --------------------------------------------------------------------------------
 
-Se o entrevistador pedir para "provar" que o registro de lancamentos
-continua no ar mesmo com problema na consolidacao, um roteiro possivel:
+Se quiser mostrar, na pratica e nao so na teoria, que o registro de
+lancamentos nao depende da consolidacao estar saudavel, um roteiro possivel:
 
     1. Suba tudo com "docker compose up".
-    2. Registre alguns lancamentos normalmente (POST /api/v1/launches) e
-       mostre que funcionam (201 Created toda vez).
-    3. Derrube o Postgres momentaneamente:
+    2. Registre alguns lancamentos normalmente e confirme que cada um
+       responde 201 Created.
+    3. Derrube o banco de dados momentaneamente:
            docker compose stop postgres
-    4. Continue chamando POST /api/v1/launches.
-       -> Aqui a resposta VAI falhar (nao ha milagre: sem banco, nao ha
-          onde persistir o lancamento em si). O ponto a explicar e outro:
-          o requisito do desafio e sobre o subsistema de CONSOLIDACAO nao
-          derrubar o de REGISTRO quando ja existem lancamentos gravados e
-          e a consolidacao (o processamento em segundo plano) que
-          apresenta instabilidade - não o banco inteiro caindo por baixo
-          do registro. Para simular isso de forma mais fiel ao requisito,
-          o ideal e olhar os logs do ConsolidationWorker: mesmo que a
-          consolidacao de uma data especifica falhe repetidamente (por
-          exemplo, por um problema transitorio), o Retry + Circuit Breaker
-          do Polly absorvem isso, e o Launch em si (que já foi salvo antes
-          de qualquer tentativa de consolidação) permanece intacto no
-          banco, disponível para reconciliação posterior.
-    5. Suba o Postgres de novo:
+    4. Nesse momento, chamadas de registro tambem vao falhar - e importante
+       ser honesto sobre isso: sem banco nenhum, nao existe lugar para
+       persistir o lancamento, e essa parte nao tem como ser contornada.
+       O ponto que o desafio pede para demonstrar e outro, mais especifico:
+       e o subsistema de CONSOLIDACAO que pode ficar instavel sem derrubar
+       o REGISTRO - nao "o banco de dados inteiro cair". Para ver esse
+       cenario mais realista, o ideal e acompanhar os logs do
+       ConsolidationWorker: mesmo quando a consolidacao de uma data
+       especifica falha repetidamente, o retry e o circuit breaker do
+       Polly absorvem essas falhas, e o lancamento em si - que ja tinha
+       sido salvo antes de qualquer tentativa de consolidacao - permanece
+       intacto no banco, pronto para ser reconciliado depois.
+    5. Suba o banco de novo:
            docker compose start postgres
-    6. Chame POST /api/v1/daily-balances/{date}/consolidate para a(s)
-       data(s) afetadas, ou simplesmente espere o ReconciliationWorker
-       rodar sua próxima passada - ele vai encontrar qualquer data com
-       lançamentos mas sem saldo "Consolidated" e reenfileirar
-       automaticamente.
+    6. Chame o endpoint de consolidacao manual (secao 6) para a data
+       afetada, ou simplesmente espere a proxima passada do
+       ReconciliationWorker - ele vai encontrar qualquer data com
+       lancamentos mas sem saldo "Consolidated" e reenfileirar
+       automaticamente, sem voce precisar fazer nada.
 
 --------------------------------------------------------------------------------
 10. TESTANDO PELOS TESTES AUTOMATIZADOS (a forma mais confiavel)
 --------------------------------------------------------------------------------
 
-Em vez de testar manualmente, a forma mais confiavel (e o que um
-entrevistador tecnico costuma valorizar mais) e rodar a suite de testes:
+Testar manualmente, como nas secoes acima, e otimo para entender e
+demonstrar o comportamento. Mas a forma mais confiavel de confirmar que
+tudo funciona - e que costuma pesar mais numa avaliacao tecnica - e rodar a
+suite de testes automatizados:
 
-    dotnet test
+    dotnet test CashFlow.sln
 
-Veja o arquivo 06-TESTES-EXPLICADOS.txt para o detalhe de cada suíte, o
-que cada teste cobre, e os requisitos para rodar os testes de integração
-(precisam de Docker disponível, pois usam Testcontainers).
+O arquivo 06-TESTES-EXPLICADOS.txt detalha cada suite, o que cada teste
+cobre de fato, e os pre-requisitos para rodar os testes de integracao (eles
+precisam do Docker rodando, porque usam Testcontainers para criar um
+Postgres real e descartavel a cada execucao).
