@@ -8,9 +8,9 @@ Este arquivo responde diretamente aos 4 criterios de avaliacao do desafio:
   3) Desacoplamento entre camadas
   4) Documentacao
 
-Para cada um, ha uma explicacao do que significa, onde esta implementado
-no codigo (com caminho de arquivo e trecho real) e como voce explicaria
-isso numa entrevista.
+Para cada um, explico o que significa em portugues simples, onde esta
+implementado no codigo (com caminho de arquivo real) e como eu explicaria
+isso numa entrevista, com minhas proprias palavras.
 
 
 -----------------------------------------------------------------------------
@@ -19,286 +19,292 @@ isso numa entrevista.
 
 1.1) SRP - Principio da Responsabilidade Unica
 ------------------------------------------------
-"Uma classe deve ter um, e somente um, motivo para mudar."
+Em portugues simples: cada classe deveria fazer so uma coisa. Se eu
+preciso mudar uma classe por dois motivos diferentes (por exemplo,
+"mudou a regra de negocio" E "mudou a forma de logar erro"), essa classe
+esta fazendo coisa demais.
 
-Onde esta:
+Onde eu aplico isso:
 
   a) src/CashFlow.Application/Consolidation/Commands/ConsolidateDailyBalance/
      ConsolidateDailyBalanceCommandHandler.cs
 
-     Este handler SO calcula o saldo do dia (soma creditos, soma debitos,
-     consolida). Ele propositalmente NAO trata exceções, NAO faz retry e
-     NAO decide o que fazer se o banco cair. Isso e responsabilidade de
-     outra classe: ConsolidationResiliencePipelineFactory (Infrastructure).
+     Esse handler so sabe calcular o saldo do dia (soma credito, soma
+     debito, grava o resultado). De proposito, ele nao trata excecao, nao
+     faz retry e nao decide o que fazer se o banco cair - isso e trabalho
+     de outra classe, a ConsolidationResiliencePipelineFactory, que fica
+     na Infrastructure.
 
-     Por que isso importa: se eu decidir trocar retry por outra
-     estrategia, ou mudar o numero de tentativas, eu mudo SOMENTE a
-     Infrastructure. A regra de negocio "como consolidar um saldo" nao
-     muda uma linha. Dois motivos de mudanca diferentes = duas classes
-     diferentes.
+     Por que separei assim: se um dia eu quiser trocar a politica de
+     retry (por exemplo, tentar 5 vezes em vez de 3), eu mudo so a
+     Infrastructure. A regra "como consolidar um saldo" nao muda nenhuma
+     linha. Dois motivos de mudanca diferentes, duas classes diferentes.
 
   b) src/CashFlow.Application/Common/Behaviors/ValidationBehavior.cs
      src/CashFlow.Application/Common/Behaviors/LoggingBehavior.cs
 
-     Validacao de entrada e logging de tempo de execucao NAO estao
-     escritos dentro de cada handler. Sao "behaviors" (decorators) que o
-     MediatR executa automaticamente antes/depois de qualquer
-     Command/Query. Se eu nao tivesse feito isso, cada um dos meus
-     handlers teria que comecar com:
-
-         if (!ModelState.IsValid) throw ...
-         _logger.LogInformation("comecei");
-         try { ... } catch { _logger.LogError(...); throw; }
-
-     repetido em todo handler. Em vez disso, essa preocupacao "transversal"
-     (cross-cutting concern) fica em UM lugar so e e aplicada a TODOS os
-     handlers automaticamente via pipeline.
+     Validacao de entrada e log de execucao nao estao escritos dentro de
+     cada handler. Sao "behaviors" que o MediatR roda automaticamente
+     antes e depois de qualquer Command ou Query. Sem isso, cada handler
+     comecaria repetindo o mesmo bloco de validar e logar. Com isso, essa
+     preocupacao fica em UM lugar e vale para TODOS os handlers.
 
   c) src/CashFlow.Domain/ValueObjects/Money.cs
 
-     A classe Money so tem uma responsabilidade: garantir que um valor
-     monetario de lancamento nunca seja zero ou negativo, e nunca tenha
-     mais de 2 casas decimais. Ela nao sabe nada sobre banco de dados, API
-     ou HTTP. So valida e representa dinheiro.
+     A classe Money tem uma responsabilidade so: garantir que um valor
+     monetario nunca seja zero, negativo, ou tenha mais de 2 casas
+     decimais. Ela nao sabe nada sobre banco de dados, API ou HTTP. So
+     valida e representa dinheiro.
 
 1.2) OCP - Principio Aberto/Fechado
 --------------------------------------
-"Deve ser possivel estender o comportamento sem modificar codigo existente."
+Em portugues simples: eu deveria poder adicionar um comportamento novo sem
+precisar editar o codigo que ja existe e ja funciona.
 
-Onde esta:
+Onde eu aplico isso:
 
-  a) O pipeline de behaviors do MediatR (ValidationBehavior, LoggingBehavior)
-     e registrado assim em src/CashFlow.Application/DependencyInjection.cs:
+  a) O pipeline de behaviors do MediatR e registrado assim em
+     src/CashFlow.Application/DependencyInjection.cs:
 
          services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
          services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
 
-     Se no futuro eu precisar adicionar um novo comportamento transversal
-     (por exemplo, cache de resposta, ou auditoria de quem fez a
-     requisicao), eu crio uma nova classe que implementa
-     IPipelineBehavior<TRequest,TResponse> e registro mais uma linha aqui.
-     Nenhum handler existente e alterado.
+     Se no futuro eu precisar de um comportamento novo (por exemplo, cache
+     de resposta ou auditoria de quem fez a chamada), eu crio uma classe
+     nova que implementa IPipelineBehavior<TRequest,TResponse> e registro
+     mais uma linha aqui. Nenhum handler que ja existe precisa ser tocado.
 
-  b) IConsolidationQueue (interface) permite trocar a fila em memoria por
-     uma fila real (RabbitMQ, SQS) implementando a interface de novo, sem
-     tocar no RegisterLaunchCommandHandler que a consome.
+  b) A interface IConsolidationQueue permite trocar a fila em memoria por
+     uma fila de verdade (RabbitMQ, SQS) so criando uma nova implementacao
+     dessa interface, sem tocar no RegisterLaunchCommandHandler que a usa.
 
 1.3) LSP - Principio da Substituicao de Liskov
 --------------------------------------------------
-"Um objeto de uma subclasse deve poder substituir um objeto da superclasse
-sem quebrar o comportamento esperado."
+Em portugues simples: se a classe B herda da classe A, eu deveria poder
+usar um objeto B em qualquer lugar que espera um objeto A, sem surpresa.
 
-Onde esta:
+Sendo honesto sobre isso: o projeto e pequeno e evita heranca de
+comportamento de negocio de proposito (prefiro composicao a heranca). O
+unico lugar com heranca e a base tecnica Entity -> AggregateRoot
+(src/CashFlow.Domain/Common/), que Launch e DailyBalance estendem. Isso e
+seguro porque AggregateRoot so adiciona uma capacidade (guardar eventos de
+dominio), nunca redefine um comportamento de um jeito que quebraria a
+expectativa de quem usa uma Entity comum.
 
-  Nao ha uma hierarquia profunda de herança de comportamento no projeto
-  (o design evita heranca de negocio propositalmente - ver principio
-  "prefira composicao a heranca"). O unico lugar com herança e a base
-  tecnica Entity -> AggregateRoot (src/CashFlow.Domain/Common/), que
-  qualquer classe de dominio (Launch, DailyBalance) estende. Isso e seguro
-  porque AggregateRoot so adiciona capacidade (lista de eventos de
-  dominio), nunca redefine comportamento de forma que quebre expectativas
-  de quem usa uma Entity.
-
-  Se um entrevistador perguntar "onde vejo LSP no seu projeto", a resposta
-  honesta e: o projeto e pequeno e deliberadamente evita hierarquias de
-  heranca de negocio (isso e uma boa pratica, nao uma lacuna) - LSP e mais
-  relevante em bases de codigo com polimorfismo de comportamento, que nao
-  e o caso aqui.
+Se me perguntarem "onde esta o LSP no seu projeto", a resposta honesta e:
+o projeto evita hierarquias de heranca de negocio de proposito, entao LSP
+nao tem muito o que mostrar aqui - e mais relevante em bases de codigo com
+bastante polimorfismo de comportamento, que nao e o caso deste desafio.
 
 1.4) ISP - Principio da Segregacao de Interface
 ---------------------------------------------------
-"Uma classe nao deveria ser forcada a depender de metodos que nao usa."
+Em portugues simples: uma classe nao deveria ser obrigada a implementar
+metodos que ela nunca vai usar.
 
-Onde esta:
+Onde eu aplico isso: em vez de uma interface generica "IRepository" com
+CRUD completo pra tudo, criei interfaces pequenas e especificas por
+agregado:
 
-  Em vez de uma unica interface generica "IRepository" com CRUD completo
-  para tudo, o projeto tem interfaces pequenas e especificas por agregado:
+  - ILaunchRepository (src/CashFlow.Domain/Repositories/ILaunchRepository.cs)
+    Tem AddAsync e GetByDateAsync. Nao tem Update nem Delete porque, nesse
+    negocio, um lancamento nunca e editado ou apagado depois de criado -
+    e um fato financeiro que fica registrado pra sempre.
 
-    - ILaunchRepository (src/CashFlow.Domain/Repositories/ILaunchRepository.cs)
-      Metodos: AddAsync, GetByDateAsync. Nada de Update/Delete porque um
-      lancamento, nesse dominio, nunca e editado ou removido depois de
-      criado (e um fato financeiro imutavel).
+  - IDailyBalanceRepository (.../IDailyBalanceRepository.cs)
+    Tem GetByDateAsync, GetByDateRangeAsync e UpsertAsync. So um metodo de
+    escrita (Upsert) porque consolidar um saldo e sempre "cria se nao
+    existe, atualiza se ja existe" - nunca um Update isolado.
 
-    - IDailyBalanceRepository (.../IDailyBalanceRepository.cs)
-      Metodos: GetByDateAsync, GetByDateRangeAsync, UpsertAsync. Um so
-      metodo de escrita (Upsert) porque a consolidacao e sempre
-      "criar-ou-atualizar", nunca um Update isolado.
-
-  Cada consumidor depende so do que precisa. Quem so le saldo diario
-  (o endpoint de relatorio) nunca fica exposto a um metodo de escrita que
-  nao usa.
+  Quem so precisa ler o saldo diario (o endpoint de relatorio) nunca fica
+  exposto a um metodo de escrita que ele nao usa.
 
 1.5) DIP - Principio da Inversao de Dependencia
 ----------------------------------------------------
-"Modulos de alto nivel nao devem depender de modulos de baixo nivel; ambos
-devem depender de abstracoes."
+Em portugues simples: as camadas de cima devem depender de contratos
+(interfaces), nunca de implementacao concreta. E quem decide qual
+implementacao usar e um lugar so, central.
 
-Este e o principio mais visivel do projeto, e o mais facil de defender numa
+Esse e o principio mais visivel do projeto, e o mais facil de defender numa
 entrevista:
 
-  - Domain define as interfaces (ILaunchRepository, IDailyBalanceRepository)
-    mas NAO as implementa.
-  - Application define as interfaces (IUnitOfWork, IConsolidationQueue,
-    IDateTimeProvider) e usa via injecao de construtor - olhe qualquer
-    handler, ele so recebe interfaces, nunca "new LaunchRepository()".
-  - Infrastructure e quem IMPLEMENTA essas interfaces (LaunchRepository
-    com EF Core, InMemoryConsolidationQueue com System.Threading.Channels,
-    SystemDateTimeProvider com DateTime.UtcNow).
+  - O Domain define as interfaces (ILaunchRepository, IDailyBalanceRepository)
+    mas nao as implementa.
+  - A Application define as interfaces (IUnitOfWork, IConsolidationQueue,
+    IDateTimeProvider) e usa por injecao no construtor - olha qualquer
+    handler, ele so recebe interfaces, nunca escreve "new LaunchRepository()"
+    na mao.
+  - A Infrastructure e quem de fato IMPLEMENTA essas interfaces
+    (LaunchRepository com EF Core, InMemoryConsolidationQueue com
+    System.Threading.Channels, SystemDateTimeProvider com DateTime.UtcNow).
   - A ligacao entre interface e implementacao concreta acontece em UM
-    lugar so: src/CashFlow.Infrastructure/DependencyInjection.cs, no
-    metodo AddInfrastructure(), via:
+    lugar so: src/CashFlow.Infrastructure/DependencyInjection.cs, no metodo
+    AddInfrastructure():
 
         services.AddScoped<ILaunchRepository, LaunchRepository>();
         services.AddScoped<IDailyBalanceRepository, DailyBalanceRepository>();
         services.AddSingleton<IConsolidationQueue>(...);
 
-  Prova concreta de que isso funciona: os testes de unidade
-  (RegisterLaunchCommandHandlerTests.cs) testam o handler passando MOCKS
-  dessas interfaces (Moq), sem nenhum banco de dados real. Isso so e
-  possivel porque o handler depende de abstracao, nao de implementacao.
+  Prova pratica de que isso funciona de verdade: os testes de unidade
+  (RegisterLaunchCommandHandlerTests.cs) testam o handler passando mocks
+  dessas interfaces com a biblioteca Moq, sem nenhum banco de dados real
+  rodando. Isso so e possivel porque o handler depende de abstracao, nao
+  de implementacao concreta.
 
-1.6) Clean Code (fora do SOLID)
------------------------------------
-Praticas de Clean Code visiveis no codigo:
+1.6) Clean Code, fora da lista do SOLID
+-----------------------------------------
+Outras praticas de Clean Code que fiz questao de manter:
 
-  - Nomes revelam intencao: RegisterLaunchCommand, ConsolidateDailyBalance,
-    InvalidLaunchAmountException - o nome da classe basta para entender o
-    que ela faz, sem precisar ler o corpo.
-  - Metodos curtos e com um nivel de abstracao: o Handle() de cada handler
-    tem no maximo ~10 linhas relevantes, e cada linha e uma "frase" no
-    nivel certo (nao mistura "somar decimais" com "abrir conexao HTTP").
-  - Fail fast e invariantes protegidos na origem: Launch.Create() e
-    Money.Create() validam e lancam excecao de dominio na criacao,
-    nunca deixando um objeto invalido existir "por um instante".
-  - Sem "numeros magicos" soltos: limites como o tamanho maximo de
-    descricao (200) e o intervalo maximo do relatorio (366 dias) estao
-    nomeados e comentados no validator, nao espalhados no codigo.
-  - Comentarios explicam o "porque", nao o "o que": quase todo comentario
-    no projeto justifica uma decisao de design (ex.: "por que este handler
-    nao trata excecao") em vez de narrar o que a linha de codigo abaixo
-    obviamente faz.
+  - Nomes que revelam a intencao: RegisterLaunchCommand,
+    ConsolidateDailyBalance, InvalidLaunchAmountException - o nome da
+    classe ja diz o que ela faz, sem precisar abrir o arquivo.
+  - Metodos curtos, um nivel de abstracao por metodo: o Handle() de cada
+    handler tem no maximo umas 10 linhas relevantes, e cada linha esta no
+    mesmo "nivel de zoom" (nao mistura "somar valores" com "abrir conexao
+    HTTP" na mesma funcao).
+  - Fail fast, protegendo a regra na origem: Launch.Create() e
+    Money.Create() validam e lancam excecao de dominio ja na criacao do
+    objeto - nunca existe, nem por um instante, um Launch ou um Money
+    invalido dentro do sistema.
+  - Sem numero magico solto no meio do codigo: limites como o tamanho
+    maximo da descricao (200 caracteres) ou o intervalo maximo do
+    relatorio (366 dias) tem nome e comentario no validator, em vez de
+    aparecer como um "200" sem explicacao espalhado pelo codigo.
+  - Comentario explica o "por que", nao o "o que": a maioria dos
+    comentarios do projeto justificam uma decisao (por exemplo, "por que
+    este handler nao trata excecao aqui") em vez de narrar algo que o
+    proprio codigo ja deixa obvio.
 
 
 -----------------------------------------------------------------------------
 2) TESTABILIDADE
 -----------------------------------------------------------------------------
 
-O que o desafio pede: "rotinas de testes automatizados para atestar o
-funcionamento correto das logicas de negocio".
+O que o desafio pede: rotinas de teste automatizado que comprovem que a
+regra de negocio funciona corretamente.
 
-O projeto tem DUAS suites de teste, cada uma com um proposito diferente:
+Tenho DUAS suites de teste, cada uma com um proposito diferente:
 
-  a) tests/CashFlow.UnitTests (39 testes) - testam REGRA DE NEGOCIO isolada,
-     sem banco de dados, sem HTTP, em milissegundos:
+  a) tests/CashFlow.UnitTests (39 testes) - testam a REGRA DE NEGOCIO
+     isolada, sem banco de dados, sem HTTP, em milissegundos:
 
-       - Domain/MoneyTests.cs        -> Money nunca aceita valor <= 0
-       - Domain/LaunchTests.cs       -> Launch.Create valida descricao e
-                                         calcula SignedAmount corretamente
-       - Domain/DailyBalanceTests.cs -> a consolidacao calcula saldo de
-                                         fechamento = creditos - debitos
+       - Domain/MoneyTests.cs        -> Money nunca aceita valor zero ou
+                                         negativo
+       - Domain/LaunchTests.cs       -> Launch.Create valida a descricao e
+                                         calcula o valor com sinal
+                                         corretamente
+       - Domain/DailyBalanceTests.cs -> a consolidacao calcula o saldo de
+                                         fechamento como creditos menos
+                                         debitos
        - Application/RegisterLaunchCommandHandlerTests.cs
-                                      -> o handler persiste o lancamento
+                                      -> o handler grava o lancamento
                                          MESMO quando a fila de
-                                         consolidacao esta cheia (o
-                                         requisito nao-funcional mais
-                                         importante do desafio, testado
-                                         de forma explicita)
+                                         consolidacao esta cheia (esse e o
+                                         requisito nao funcional mais
+                                         importante do desafio, e ele esta
+                                         testado de forma explicita, nao
+                                         so "na teoria")
        - Application/ConsolidateDailyBalanceCommandHandlerTests.cs
                                       -> a consolidacao e idempotente:
                                          chamar duas vezes para a mesma
                                          data nao duplica nada
        - Application/RegisterLaunchCommandValidatorTests.cs
-                                      -> valida os limites de entrada
-                                         (valor > 0, descricao <= 200 chars)
+                                      -> confirma os limites de entrada
+                                         (valor tem que ser maior que
+                                         zero, descricao no maximo 200
+                                         caracteres)
        - Application/InMemoryConsolidationQueueTests.cs
-                                      -> a fila descarta sinal em vez de
-                                         bloquear quando esta cheia
+                                      -> a fila descarta o sinal em vez de
+                                         travar a aplicacao quando esta
+                                         cheia
 
-     Como isso e possivel sem banco de dados real: os handlers dependem
-     de INTERFACES (ILaunchRepository, IUnitOfWork etc.), entao nos testes
-     eu crio um "dublê" (mock) dessas interfaces com a biblioteca Moq e
-     verifico apenas o comportamento da regra de negocio.
+     Como isso e possivel sem um banco de dados real: os handlers
+     dependem de INTERFACES (ILaunchRepository, IUnitOfWork, etc.),
+     entao nos testes eu crio um dublê (mock) dessas interfaces com a
+     biblioteca Moq e verifico so o comportamento da regra de negocio.
 
   b) tests/CashFlow.IntegrationTests (8 testes) - testam o sistema
-     INTEIRO, do HTTP ate o Postgres real, usando Testcontainers (sobe um
-     container Docker de Postgres so para os testes, descartavel):
+     INTEIRO, do HTTP ate o Postgres real, usando Testcontainers (que sobe
+     um container Docker de Postgres so pra rodar os testes e descarta em
+     seguida):
 
-       - Api/LaunchesControllerTests.cs      -> POST /launches de ponta a
-                                                 ponta grava no banco real
-       - Api/DailyBalancesControllerTests.cs -> consolidacao + idempotencia
-                                                 validadas contra o banco
-                                                 real, nao um mock
+       - Api/LaunchesControllerTests.cs      -> um POST /launches de
+                                                 ponta a ponta grava no
+                                                 banco de verdade
+       - Api/DailyBalancesControllerTests.cs -> a consolidacao e a
+                                                 idempotencia sao validadas
+                                                 contra o banco de verdade,
+                                                 nao contra um mock
 
-  Por que as duas: testes de unidade sao rapidos e me dizem SE a regra de
-  negocio esta certa; testes de integracao sao mais lentos mas me dizem se
-  as camadas realmente conversam entre si (mapeamento do EF Core, tipos de
-  coluna, JSON de request/response) - um mock nunca pegaria um erro de
-  mapeamento de banco, por exemplo.
+  Por que as duas: os testes de unidade sao rapidos e me dizem SE a regra
+  de negocio esta certa; os testes de integracao sao mais lentos, mas me
+  dizem se as camadas realmente conversam entre si direito (mapeamento do
+  EF Core, tipo de coluna, formato do JSON de request/response) - um mock
+  nunca pegaria um erro de mapeamento de banco, por exemplo.
 
-  Como rodar (ver tambem 06-TESTES-EXPLICADOS.txt para o passo a passo
-  completo):
+  Como rodar (o passo a passo completo esta em 06-TESTES-EXPLICADOS.txt):
 
       dotnet test tests/CashFlow.UnitTests/CashFlow.UnitTests.csproj
       dotnet test tests/CashFlow.IntegrationTests/CashFlow.IntegrationTests.csproj
 
-  Resultado nesta revisao: 48 testes de unidade passando, build sem
-  nenhum warning.
+  Resultado na ultima verificacao que fiz: 48 testes de unidade passando,
+  build sem nenhum warning.
 
 
 -----------------------------------------------------------------------------
 3) DESACOPLAMENTO ENTRE CAMADAS
 -----------------------------------------------------------------------------
 
-O que o desafio pede: "isolamento evidente das atribuicoes em diferentes
-camadas da aplicacao (infraestrutura, aplicacao e dominio)".
+O que o desafio pede: isolamento evidente das atribuicoes em diferentes
+camadas (infraestrutura, aplicacao e dominio).
 
-Prova objetiva (nao e so "no papel" - e forcado pelo compilador): a
-dependencia entre projetos .csproj so aponta em UMA direcao:
+Prova objetiva disso, e nao so "no papel" - e o proprio compilador que
+obriga: a dependencia entre os projetos .csproj so aponta em UMA direcao.
 
-    CashFlow.Domain          -> nao depende de NADA (nem de outro projeto
+    CashFlow.Domain          -> nao depende de nada (nem de outro projeto
                                  da solucao, nem de bibliotecas externas
                                  como EF Core ou MediatR)
 
     CashFlow.Application     -> depende so de CashFlow.Domain
-                                 (+ MediatR e FluentValidation, que sao
+                                 (mais MediatR e FluentValidation, que sao
                                  bibliotecas de orquestracao, nao de
                                  infraestrutura)
 
-    CashFlow.Infrastructure   -> depende de CashFlow.Application (e,
-                                 por consequencia, de Domain)
-                                 (+ EF Core, Npgsql, Polly)
+    CashFlow.Infrastructure   -> depende de CashFlow.Application (e, por
+                                 consequencia, de Domain tambem)
+                                 (mais EF Core, Npgsql, Polly)
 
     CashFlow.Api              -> depende de Application e Infrastructure
-                                 (e o unico projeto que "amarra" tudo)
+                                 (e o unico projeto que "amarra" tudo no
+                                 final)
 
-Isso significa, na pratica:
+Na pratica, isso significa:
 
-  - O Domain nao sabe que existe um banco de dados Postgres. Se eu trocar
-    Postgres por SQL Server ou MongoDB, ZERO linhas de Domain mudam.
-  - O Domain nao sabe que existe uma API REST. Se eu expuser o mesmo
-    dominio via um Worker de fila (sem HTTP nenhum), ZERO linhas de
-    Domain ou Application mudam - so criaria um novo projeto de entrada
-    que chama os mesmos Commands via MediatR.
-  - A Application (os Commands/Handlers, que representam os casos de uso)
-    NAO sabe como o EF Core funciona. Ela so conhece a interface
-    ILaunchRepository. A implementacao real com DbContext, LINQ to SQL
-    etc. mora exclusivamente em Infrastructure.
+  - O Domain nao sabe que existe um banco Postgres. Se eu trocar Postgres
+    por SQL Server ou MongoDB, nenhuma linha do Domain muda.
+  - O Domain nao sabe que existe uma API REST. Se eu quisesse expor o
+    mesmo dominio via um Worker de fila, sem HTTP nenhum, nenhuma linha de
+    Domain ou Application mudaria - eu so criaria um novo projeto de
+    entrada que chama os mesmos Commands via MediatR.
+  - A Application (os Commands e Handlers, que sao os casos de uso) nao
+    sabe como o EF Core funciona por dentro. Ela conhece so a interface
+    ILaunchRepository. A implementacao real com DbContext, consulta SQL
+    etc. mora exclusivamente na Infrastructure.
 
-  Como validar isso de forma pratica: tente compilar so o projeto
-  CashFlow.Domain sozinho (dotnet build src/CashFlow.Domain) - ele
-  compila isoladamente, sem baixar EF Core, sem Npgsql, sem nada. Isso e
-  a prova de que o dominio esta genuinamente isolado, nao é so uma pasta
-  com nome bonito.
+  Como eu comprovaria isso na pratica: compilando so o projeto
+  CashFlow.Domain sozinho (dotnet build src/CashFlow.Domain), ele compila
+  isolado, sem precisar de EF Core, sem Npgsql, sem nada externo. Essa e a
+  prova de que o dominio esta realmente isolado, e nao e so uma pasta com
+  nome bonito.
 
-  Regra pratica que segui ao decidir "essa classe vai em qual camada?":
+  A regra pratica que usei pra decidir "essa classe vai em qual camada":
 
-    - "Isso e uma regra do NEGOCIO (existiria mesmo sem banco de dados
-      ou sem API)?" -> Domain.
-    - "Isso e um CASO DE USO (orquestra passos, mas nao decide a regra em
-      si)?" -> Application.
-    - "Isso e um DETALHE TECNICO (como persistir, como enviar, como
-      reter)?" -> Infrastructure.
-    - "Isso e sobre RECEBER uma requisicao HTTP e devolver uma resposta"?
+    - "Isso e uma regra do NEGOCIO, que existiria mesmo sem banco de dados
+      ou sem API?" -> Domain.
+    - "Isso e um CASO DE USO, que orquestra passos mas nao decide a regra
+      em si?" -> Application.
+    - "Isso e um DETALHE TECNICO, sobre como persistir, enviar ou
+      tentar de novo?" -> Infrastructure.
+    - "Isso e sobre RECEBER uma requisicao HTTP e devolver uma resposta?"
       -> Api.
 
 
@@ -306,19 +312,20 @@ Isso significa, na pratica:
 4) DOCUMENTACAO
 -----------------------------------------------------------------------------
 
-O que o desafio pede: "explicacoes transparentes sobre as escolhas
-tecnicas realizadas e sobre como executar a aplicacao".
+O que o desafio pede: explicacoes transparentes sobre as escolhas
+tecnicas feitas e sobre como executar a aplicacao.
 
 O repositorio tem documentacao em duas camadas:
 
-  a) README.md - e o ponto de entrada. Cobre: pre-requisitos, como rodar
-     (Docker Compose e modo local), como acessar o Swagger, tabela de
-     aderencia ao desafio, estrutura do banco de dados, padroes de
-     projeto usados e como rodar os testes.
+  a) README.md - e o ponto de entrada. Cobre pre-requisitos, como rodar
+     (Docker Compose e tambem modo local), como abrir o Swagger, uma
+     tabela comparando o que o desafio pediu com o que foi entregue, a
+     estrutura do banco de dados, os padroes de projeto usados e como
+     rodar os testes.
 
-  b) Arquivos .txt numerados na raiz - cada um responde uma pergunta
-     tipica de entrevista tecnica em profundidade maior do que caberia
-     no README:
+  b) Os arquivos .txt numerados na raiz - cada um responde uma pergunta
+     tipica de entrevista tecnica com mais profundidade do que caberia no
+     README:
 
        01-ANALISE-DE-ADERENCIA-AO-DESAFIO.txt
        02-COMO-TESTAR-A-API.txt
@@ -327,27 +334,30 @@ O repositorio tem documentacao em duas camadas:
        05-BANCO-DE-DADOS-EXPLICADO.txt
        06-TESTES-EXPLICADOS.txt
        07-QUALIDADE-SOLID-TESTABILIDADE-DESACOPLAMENTO.txt (este arquivo)
-       ARQUITETURA-E-DECISOES-TECNICAS.txt (documento de referencia mais
-       longo, com o racional completo de cada decisao e os trade-offs
-       considerados)
+       ARQUITETURA-E-DECISOES-TECNICAS.txt (documento mais longo, com o
+       racional completo de cada decisao e os trade-offs que considerei)
 
-  c) Dentro do proprio codigo - todo Handler, Value Object e componente de
+  c) Dentro do proprio codigo - todo handler, value object e componente de
      resiliencia (fila, worker, circuit breaker) tem um comentario XML
-     (///) explicando o "porque" da decisao, nao so o "o que" a classe
-     faz. Esses mesmos comentarios sao exibidos automaticamente na UI do
+     (///) explicando o "por que" da decisao, nao so "o que" a classe
+     faz. Esses mesmos comentarios aparecem automaticamente na tela do
      Swagger (ver 02-COMO-TESTAR-A-API.txt), porque o projeto gera o
      arquivo CashFlow.Api.xml a partir deles (GenerateDocumentationFile
-     habilitado no CashFlow.Api.csproj + IncludeXmlComments no Program.cs).
+     habilitado em CashFlow.Api.csproj, mais IncludeXmlComments no
+     Program.cs).
 
-  Transparencia sobre limitacoes conhecidas (isso tambem conta como boa
-  documentacao - nao esconder trade-offs): a fila de consolidacao e em
-  memoria (Channel), o que significa que um sinal pendente se perde se o
-  processo cair antes do worker consumi-lo. Isso e aceitavel dentro do
-  requisito do desafio (ate 5% de perda de SINAL, nunca de LANCAMENTO) e
-  esta coberto pelo job de reconciliacao periodica (ReconciliationWorker),
-  mas em um cenario de producao real com multiplas instancias a
-  recomendacao documentada e trocar por uma fila persistente (SQS,
-  RabbitMQ, Postgres como fila). Isso esta detalhado em
+  Uma coisa que fiz questao de deixar transparente, porque tambem conta
+  como boa documentacao - nao esconder um trade-off: a fila de
+  consolidacao e em memoria (um Channel do .NET). Isso significa que um
+  sinal pendente se perde se o processo cair antes do worker consumir.
+  Isso e aceitavel dentro do que o desafio pede (perder ate 5% dos
+  SINAIS de consolidacao, nunca dos LANCAMENTOS), e ainda existe uma rede
+  de seguranca por tras disso, o ReconciliationWorker, que roda de tempos
+  em tempos e refaz qualquer consolidacao que tenha ficado pendente. Mas
+  em um cenario de producao com varias instancias da API rodando ao mesmo
+  tempo, a recomendacao que documentei e trocar essa fila por algo
+  persistente, como SQS, RabbitMQ ou uma tabela de fila no proprio
+  Postgres. Esse detalhe esta explicado em
   ARQUITETURA-E-DECISOES-TECNICAS.txt.
 
 
@@ -355,14 +365,14 @@ O repositorio tem documentacao em duas camadas:
 RESUMO PARA RESPONDER RAPIDO NA ENTREVISTA
 -----------------------------------------------------------------------------
 
-Se o entrevistador perguntar direto "voce seguiu Clean Code e SOLID?",
-uma resposta curta e defensavel e:
+Se me perguntarem direto "voce seguiu Clean Code e SOLID?", essa e a
+resposta curta que eu daria:
 
   "Sim. O DIP e o mais visivel: toda camada de cima depende so de
   interfaces, nunca de implementacao concreta, e isso e forcado pelas
-  referencias de projeto no .csproj - o Domain nem consegue enxergar o EF
-  Core. O SRP aparece separando validacao/logging dos handlers via
+  proprias referencias entre os projetos - o Domain nem enxerga o EF Core.
+  O SRP aparece separando validacao e logging dos handlers, atraves do
   pipeline do MediatR, e separando a regra de consolidacao da politica de
-  retry/circuit breaker, que fica so na Infrastructure. Isso tambem e o
-  que torna o projeto testavel: os 39 testes de unidade rodam sem banco
-  de dados nenhum, so trocando as interfaces por mocks."
+  retry e circuit breaker, que fica so na Infrastructure. E isso tambem e
+  o que torna o projeto testavel: os 39 testes de unidade rodam sem banco
+  de dados nenhum, so troquei as interfaces por mocks."
