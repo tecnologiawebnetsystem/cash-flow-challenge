@@ -54,7 +54,7 @@ Checklist objetivo comparando o que o desafio pediu com o que foi efetivamente i
 
 | Requisito | Status | Onde |
 |---|---|---|
-| Desenho da solução / diagramas de arquitetura | Atendido | Diagrama de camadas em [Arquitetura](#arquitetura) e diagrama entidade-relacionamento em [Estrutura do banco de dados](#estrutura-do-banco-de-dados) |
+| Desenho da solução / diagramas de arquitetura | Atendido | Diagrama de camadas e de sequência (Mermaid, renderizados pelo GitHub) em [Arquitetura](#arquitetura), e diagrama entidade-relacionamento em [Estrutura do banco de dados](#estrutura-do-banco-de-dados) |
 | Processamento assíncrono, filas ou mensageria | Atendido | Fila produtor/consumidor em memória (`System.Threading.Channels`) + `BackgroundService` dedicado |
 | Uso de containers (Docker) | Atendido | `Dockerfile` + `docker-compose.yml` (API + PostgreSQL) |
 
@@ -109,6 +109,23 @@ A solução é dividida em quatro camadas, com dependências apontando sempre pa
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+O mesmo desenho, em um diagrama renderizado pelo GitHub (Mermaid):
+
+```mermaid
+graph TD
+    Api["CashFlow.Api<br/>Controllers · Contratos HTTP · Middleware de erros · Swagger"]
+    App["CashFlow.Application<br/>Commands/Queries (CQRS) · Handlers (MediatR) · FluentValidation · Pipeline Behaviors"]
+    Domain["CashFlow.Domain<br/>Entidades · Objetos de Valor · Eventos de Domínio · Contratos de repositório<br/>(não depende de nenhuma outra camada)"]
+    Infra["CashFlow.Infrastructure<br/>EF Core + PostgreSQL · Fila de consolidação · Workers em background · Polly"]
+
+    Api -->|depende de| App
+    App -->|depende de| Domain
+    Infra -->|implementa as interfaces de| Domain
+    Infra -->|depende de| App
+
+    style Domain fill:#2b2b2b,color:#fff,stroke:#888
+```
+
 ### Fluxo de registro de um lançamento
 
 1. `POST /api/v1/launches` chega ao `LaunchesController`, que apenas traduz a requisição HTTP em um `RegisterLaunchCommand` e o envia ao MediatR.
@@ -119,6 +136,38 @@ A solução é dividida em quatro camadas, com dependências apontando sempre pa
 6. Um `ReconciliationWorker` roda periodicamente como rede de segurança final, reconsolidando qualquer data que tenha lançamentos mas ainda não possua um saldo diário com status `Consolidated` — cobrindo tanto sinais descartados quanto falhas que esgotaram todas as tentativas de retry.
 
 Como a consolidação é **idempotente** (ela sempre recalcula o saldo do zero a partir dos lançamentos daquela data), reprocessar a mesma data múltiplas vezes nunca gera duplicidade ou inconsistência.
+
+O mesmo fluxo, como diagrama de sequência — note que o retorno HTTP 201 ao cliente acontece **antes** de qualquer tentativa de consolidação, evidenciando por que uma falha na consolidação nunca impede o registro do lançamento:
+
+```mermaid
+sequenceDiagram
+    participant Cliente
+    participant Controller as LaunchesController
+    participant Handler as RegisterLaunchCommandHandler
+    participant DB as PostgreSQL
+    participant Fila as InMemoryConsolidationQueue
+    participant Worker as ConsolidationWorker
+    participant Reconciliacao as ReconciliationWorker
+
+    Cliente->>Controller: POST /api/v1/launches
+    Controller->>Handler: RegisterLaunchCommand
+    Handler->>Handler: Launch.Create(...) valida invariantes
+    Handler->>DB: Persiste o lançamento (commit)
+    DB-->>Handler: OK
+    Handler->>Fila: TryEnqueue(data) — best-effort, não bloqueante
+    Note over Fila: Se a fila estiver saturada,<br/>o sinal é descartado e apenas logado
+    Handler-->>Controller: 201 Created
+    Controller-->>Cliente: 201 Created (lançamento já garantido)
+
+    par Consolidação assíncrona
+        Fila->>Worker: sinal de data pendente
+        Worker->>Worker: retry + circuit breaker (Polly)
+        Worker->>DB: recalcula e grava o saldo diário
+    and Rede de segurança periódica
+        Reconciliacao->>DB: a cada 5 min, busca datas sem saldo Consolidated
+        Reconciliacao->>Fila: reenfileira as datas pendentes
+    end
+```
 
 ## Padrões de projeto utilizados
 
@@ -153,7 +202,7 @@ Cada um desses padrões está justificado em detalhe (incluindo os trade-offs co
 | Resiliência | Polly (retry + circuit breaker) |
 | Fila / mensageria | `System.Threading.Channels` (fila em memória, produtor/consumidor) |
 | Documentação da API | Swagger / OpenAPI (Swashbuckle) |
-| Testes de unidade | xUnit, FluentAssertions, NSubstitute |
+| Testes de unidade | xUnit, FluentAssertions, Moq |
 | Testes de integração | xUnit, WebApplicationFactory, Testcontainers (PostgreSQL real em container) |
 | Containerização | Docker / Docker Compose |
 
@@ -199,6 +248,33 @@ Existem apenas duas tabelas, refletindo os dois conceitos do domínio:
 
   (PK) = chave primária   (UQ) = índice único   (IX) = índice não único
   * ux_daily_balances_reference_date garante uma única linha por data
+```
+
+O mesmo modelo, como diagrama entidade-relacionamento renderizado pelo GitHub (Mermaid). A relação é lógica (agregação por data em tempo de execução, na consulta que recalcula o saldo), e não uma foreign key física entre as tabelas:
+
+```mermaid
+erDiagram
+    LAUNCHES {
+        uuid Id PK
+        varchar_200 Description
+        numeric_18_2 amount
+        varchar_20 Type
+        date launch_date
+        timestamptz created_at_utc
+    }
+    DAILY_BALANCES {
+        uuid Id PK
+        date ReferenceDate UK
+        numeric_18_2 total_credits
+        numeric_18_2 total_debits
+        numeric_18_2 closing_balance
+        varchar_20 Status
+        timestamptz ConsolidatedAtUtc
+        integer FailedAttempts
+        varchar_1000 FailureReason
+        bytea RowVersion
+    }
+    LAUNCHES }o--|| DAILY_BALANCES : "agregados por launch_date = ReferenceDate (calculado em runtime, sem FK física)"
 ```
 
 **Tabela `launches`** — fonte única da verdade; nunca é alterada ou apagada após criada (append-only).
